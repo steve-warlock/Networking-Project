@@ -336,6 +336,17 @@ void ClientGUI::processInput(sf::Event event) {
                                     sf::sleep(sf::milliseconds(700));
                                     this->window.close();
                                     return;
+                                } else if (command == "clear") {
+                                    this -> terminalLines.clear();
+                                    updateTerminalDisplay();
+                                    updateScrollBar();
+                                    
+                                    std::string newCurrentPath = this->backend.GetPath() + "> ";
+                                    this->inputText.setString(newCurrentPath);
+                                    this->cursorPosition = 0.0f;
+                                    updateCursor();
+                                    
+                                    return;
                                 } else {
                                     // Normal output case for other commands
                                     if (!response.empty()) {
