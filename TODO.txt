@@ -1,0 +1,5 @@
+1. Add the path in shell input line -> Done and Improved cd functionality and added support for arrow and delete keys 
+2. Improved GUI -> horizontal split
+                -> vertical split
+                -> open terminal text editors
+3. Add terminal view with history, scrollbar -> done scrollbar
