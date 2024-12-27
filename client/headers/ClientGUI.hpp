@@ -70,6 +70,7 @@ private:
     editorMode currentMode = editorMode::NORMAL;
     std::string editedFileName;
     std::string editedFileContent;
+    size_t editorCursorPosition = 0;
     bool ctrlXPressed = false; // ctrl + x for exit in nano
     
     void initializeWindow();

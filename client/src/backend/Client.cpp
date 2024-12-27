@@ -9,10 +9,7 @@
 
 namespace client {
 
-Client::Client(std::string serverIP, unsigned short port)
-: backend_logic(serverIP, port), gui_logic(backend_logic)
-{
-}
+Client::Client(std::string serverIP, unsigned short port) : backend_logic(serverIP, port), gui_logic(backend_logic){}
 
 void Client::run() {
     gui_logic.run();

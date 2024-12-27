@@ -6,7 +6,6 @@
 //
 
 #include "../../headers/ClientGUI.hpp"
-#include <iostream>
 
 using namespace std::filesystem;
 
