@@ -460,7 +460,6 @@ void ClientGUI::processInput(sf::Event event) {
 }
 
 void ClientGUI::addLineToTerminal(const std::string &line) {
-    // Păstrează exact formatarea originală
     std::string trimmedLine = line;
     trimmedLine.erase(trimmedLine.find_last_not_of(" \t") + 1);
     
