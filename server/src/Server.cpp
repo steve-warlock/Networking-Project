@@ -143,7 +143,7 @@ std::string Server::executeCommand(const std::string &cmd) {
 
     // edge case
     if (result.empty()) {
-        return "Error: Command executed but produced no output.";
+        return "Warn: Command executed but produced no output.";
     }
 
     return result;

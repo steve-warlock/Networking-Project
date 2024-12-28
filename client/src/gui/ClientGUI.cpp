@@ -12,7 +12,7 @@ using namespace std::filesystem;
 namespace gui {
 
 ClientGUI::ClientGUI(backend::ClientBackend &backend)
-: backend(backend), logger("./client_gui.log"), cursorVisible(true),
+: backend(backend), guiLogger("./client_gui.log"), cursorVisible(true),
 cursorBlinkInterval(sf::seconds(0.5f)) {
     try {
         // setup window (font, cursor, path)
@@ -24,10 +24,10 @@ cursorBlinkInterval(sf::seconds(0.5f)) {
         setupTexts();
         initializeCursor();
         
-        logger.log("[DEBUG](ClientGUI::ClientGUI) GUI initialized successfully.");
+        guiLogger.log("[DEBUG](ClientGUI::ClientGUI) GUI initialized successfully.");
     }
     catch (const std::exception& e) {
-        logger.log("[ERROR](ClientGUI::ClientGUI) An error occured during initialization: " + std::string(e.what()));
+        guiLogger.log("[ERROR](ClientGUI::ClientGUI) An error occured during initialization: " + std::string(e.what()));
     }
 }
 
@@ -35,16 +35,16 @@ void ClientGUI::initializeWindow() {
     this -> window.create(sf::VideoMode(1280, 720), "Client RemMux", sf::Style::Resize | sf::Style::Default);
     this -> window.setFramerateLimit(60);
     this -> window.setVerticalSyncEnabled(true);
-    logger.log("[DEBUG](ClientGUI::ClientGUI) Window initialized successfully.");
+    guiLogger.log("[DEBUG](ClientGUI::ClientGUI) Window initialized successfully.");
 }
 
 void ClientGUI::loadFont() {
     std::string fontPath = path(current_path() / "assets" / "arial.ttf").string();
     if (!this -> font.loadFromFile(fontPath)) {
-        logger.log("[ERROR](ClientGUI::loadFont) Failed to load font from path: " + fontPath);
+        guiLogger.log("[ERROR](ClientGUI::loadFont) Failed to load font from path: " + fontPath);
         throw std::runtime_error("Failed to load font from path: " + fontPath);
     }
-    logger.log("[DEBUG](ClientGUI::loadFont) Font loaded successfully from path: " + fontPath);
+    guiLogger.log("[DEBUG](ClientGUI::loadFont) Font loaded successfully from path: " + fontPath);
 }
 
 void ClientGUI::setupTexts(){
@@ -71,7 +71,7 @@ void ClientGUI::setupTexts(){
     this -> inputText.setString(initialText);
     this -> outputText.setString("");
     
-    logger.log("[DEBUG](ClientGui::setupTexts) Text elements configured successfully.");
+    guiLogger.log("[DEBUG](ClientGui::setupTexts) Text elements configured successfully.");
 }
 
 void ClientGUI::initializeCursor() {
@@ -100,7 +100,7 @@ void ClientGUI::initializeCursor() {
     this -> cursorBlinkInterval = sf::seconds(0.5f);
     this -> cursorVisible = true;
     
-    logger.log("[DEBUG](ClientGUI::initializeCursor) Cursor initialized successfully.");
+    guiLogger.log("[DEBUG](ClientGUI::initializeCursor) Cursor initialized successfully.");
     
 }
 
@@ -131,15 +131,15 @@ void ClientGUI::updateCursor() {
     cursor.setPosition(cursorOffset, this -> inputText.getPosition().y + 3);
     cursor.setSize(sf::Vector2f(2, this -> inputText.getCharacterSize()));
     
-    logger.log("[DEBUG](ClientGUI::updateCursor) Cursor positioned at: " +
+    guiLogger.log("[DEBUG](ClientGUI::updateCursor) Cursor positioned at: " +
                std::to_string(cursorOffset) + ", Position: " + std::to_string(cursorPosition));
 }
 
 void ClientGUI::updateTerminalDisplay() {
     try {
         
-        size_t maxVisibleLines = std::min(this->MAX_VISIBLE_LINES,
-                    static_cast<size_t>(this->window.getSize().y / this->inputText.getCharacterSize())
+        size_t maxVisibleLines = std::min(this -> MAX_VISIBLE_LINES,
+                    static_cast<size_t>(this -> window.getSize().y / this -> inputText.getCharacterSize())
                 );
         
         std::string displayText;
@@ -170,9 +170,9 @@ void ClientGUI::updateTerminalDisplay() {
         
         if (std::abs(newInputYPosition - inputYPosition) >= 1.0f) {
             inputYPosition = newInputYPosition;
-            this->inputText.setPosition(0, inputYPosition);
+            this -> inputText.setPosition(0, inputYPosition);
             
-            logger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Position Updated: " +
+            guiLogger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Position Updated: " +
                        std::to_string(inputYPosition) +
                        ", Output Height: " + std::to_string(outputHeight));
         }
@@ -180,17 +180,17 @@ void ClientGUI::updateTerminalDisplay() {
         
         
         // Debug logging
-        this -> logger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Input Y Position: " +
+        this -> guiLogger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Input Y Position: " +
                            std::to_string(inputYPosition) +
-                           ". Total lines: " + std::to_string(this->terminalLines.size()));
+                           ". Total lines: " + std::to_string(this -> terminalLines.size()));
     }
     catch (const std::exception& e) {
         // Log any exception that occurs
-        this -> logger.log("[ERROR](ClientGUI::updateTerminalDisplay) Exception: " + std::string(e.what()));
+        this -> guiLogger.log("[ERROR](ClientGUI::updateTerminalDisplay) Exception: " + std::string(e.what()));
     }
     catch (...) {
         // Log any unknown exception
-        this -> logger.log("[ERROR](ClientGUI::updateTerminalDisplay) Unknown exception occurred");
+        this -> guiLogger.log("[ERROR](ClientGUI::updateTerminalDisplay) Unknown exception occurred");
     }
 }
 
@@ -218,7 +218,7 @@ void ClientGUI::updateScrollBar() {
         this -> scrollBar.setSize(sf::Vector2f(0,0));
     }
     
-    logger.log("[DEBUG](ClientGUI::updateScrollBar) Updated scroll bar. Total lines: " + std::to_string(this -> terminalLines.size()) +
+    guiLogger.log("[DEBUG](ClientGUI::updateScrollBar) Updated scroll bar. Total lines: " + std::to_string(this -> terminalLines.size()) +
                ", Visible lines: " + std::to_string(maxVisibleLines) + ", Scroll position: " + std::to_string(this -> scrollPosition));
     
 }
@@ -240,7 +240,7 @@ void ClientGUI::scrollUp(int lines) {
         updateTerminalDisplay();
         updateScrollBar();
         
-        logger.log("[DEBUG](ClientGUI::scrollUp) Scrolled up " +
+        guiLogger.log("[DEBUG](ClientGUI::scrollUp) Scrolled up " +
                    std::to_string(lines) + " lines. Current scroll position: " +
                    std::to_string(this -> scrollPosition));
     }
@@ -256,12 +256,56 @@ void ClientGUI::scrollDown(int lines) {
         updateTerminalDisplay();
         updateScrollBar();
     
-        logger.log("[DEBUG](ClientGUI::scrollDown) Scrolled down " +
+        guiLogger.log("[DEBUG](ClientGUI::scrollDown) Scrolled down " +
                    std::to_string(lines) + " lines. Current scroll position: " +
                    std::to_string(this -> scrollPosition));
     }
 }
 
+void ClientGUI::navigateCommandHistory(bool goUp) {
+    std::string currentPath = this->backend.GetPath() + "> ";
+
+    if (this -> commandHistory.empty()) {
+        guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) No commands in history.");
+        return;
+    }
+
+    if (goUp) {
+        if (this -> currentHistoryIndex == -1) {
+            this -> currentHistoryIndex = this -> commandHistory.size() - 1;
+        } else if (this -> currentHistoryIndex > 0) {
+            this -> currentHistoryIndex--;
+        }
+    } else {
+        if (this -> currentHistoryIndex == -1) {
+            return;
+        }
+
+        if (this -> currentHistoryIndex < this -> commandHistory.size() - 1) {
+            this -> currentHistoryIndex++;
+        } else {
+            this -> currentHistoryIndex = -1;
+        }
+    }
+
+    if (this -> currentHistoryIndex != -1) {
+        std::string fullCommand = currentPath + this -> commandHistory[this -> currentHistoryIndex];
+        this -> inputText.setString(fullCommand);
+        
+        this -> cursorPosition = this -> commandHistory[this -> currentHistoryIndex].length();
+
+        guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) Selected command: '" +
+                      this -> commandHistory[this -> currentHistoryIndex] +
+                      "'. Index: " + std::to_string(this -> currentHistoryIndex));
+    } else {
+        this -> inputText.setString(currentPath);
+        this -> cursorPosition = 0;
+
+        guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) Reset to initial state.");
+    }
+
+    updateCursor();
+}
 
 void ClientGUI::handleSpecialInput(sf::Event event) {
     switch (event.key.code) {
@@ -277,12 +321,20 @@ void ClientGUI::handleSpecialInput(sf::Event event) {
             // Move cursor right, but not beyond input text
             this -> cursorPosition = std::max(0.0f, this -> cursorPosition - 1.0f);
             break;
+        
+        case sf::Keyboard::Up:
+            navigateCommandHistory(true); // true -> previous commands
+            break;
+           
+        case sf::Keyboard::Down:
+            navigateCommandHistory(false); // false -> next commands
+            break;
             
         default:
             break;
     }
     
-    logger.log("[DEBUG](ClientGUI::handleSpecialInput) Processed special input.");
+    guiLogger.log("[DEBUG](ClientGUI::handleSpecialInput) Processed special input.");
     
     updateCursor();
     
@@ -309,19 +361,20 @@ void ClientGUI::processInput(sf::Event event) {
                     std::string command;
                     if (currentInput.length() > currentPath.length()) {
                         command = currentInput.substr(currentPath.length());
+                        this -> commandHistory.push_back(command);
                     }
                     
                     if (!command.empty()) {
                         try {
                             addLineToTerminal(currentInput);
-                            std::string response = this->backend.sendCommand(command);
+                            std::string response = this -> backend.sendCommand(command);
                             
                             // check if the command is cd
                             if (command.substr(0, 2) == "cd") {
                                 if (response.find("Invalid directory") == std::string::npos &&
                                     response.find("Error") == std::string::npos) {
                                     std::string newPath = response.substr(response.find_last_of('\n') + 1);
-                                    this->backend.SetPath(newPath);
+                                    this -> backend.SetPath(newPath);
                                     addLineToTerminal("Changed directory to: " + newPath);
                                 } else {
                                     addLineToTerminal(response);
@@ -329,21 +382,21 @@ void ClientGUI::processInput(sf::Event event) {
                             } else // check if the command is exit
                                 if (command == "exit") {
                                     addLineToTerminal(response);
-                                    this->window.clear(sf::Color::Black);
-                                    this->window.draw(this->outputText);
+                                    this -> window.clear(sf::Color::Black);
+                                    this -> window.draw(this -> outputText);
                                     this -> window.draw(this -> scrollBar);
-                                    this->window.display();
+                                    this -> window.display();
                                     sf::sleep(sf::milliseconds(700));
-                                    this->window.close();
+                                    this -> window.close();
                                     return;
                                 } else if (command == "clear") {
                                     this -> terminalLines.clear();
                                     updateTerminalDisplay();
                                     updateScrollBar();
                                     
-                                    std::string newCurrentPath = this->backend.GetPath() + "> ";
-                                    this->inputText.setString(newCurrentPath);
-                                    this->cursorPosition = 0.0f;
+                                    std::string newCurrentPath = this -> backend.GetPath() + "> ";
+                                    this -> inputText.setString(newCurrentPath);
+                                    this -> cursorPosition = 0.0f;
                                     updateCursor();
                                     
                                     return;
@@ -361,7 +414,7 @@ void ClientGUI::processInput(sf::Event event) {
                                 }
                             
                             // Update inputText with new path
-                            std::string newCurrentPath = this->backend.GetPath() + "> ";
+                            std::string newCurrentPath = this -> backend.GetPath() + "> ";
                             this -> inputText.setString(newCurrentPath);
                             this -> cursorPosition = 0.0f;
                             updateCursor();
@@ -397,44 +450,71 @@ void ClientGUI::processInput(sf::Event event) {
         }
     }
     catch (const std::exception& e) {
-        logger.log("[ERROR](ClientGUI::processInput) Exception: " + std::string(e.what()));
+        guiLogger.log("[ERROR](ClientGUI::processInput) Exception: " + std::string(e.what()));
         addLineToTerminal("Error: " + std::string(e.what()));
     }
     catch (...) {
-        logger.log("[ERROR](ClientGUI::processInput) Unknown exception occurred.");
+        guiLogger.log("[ERROR](ClientGUI::processInput) Unknown exception occurred.");
         addLineToTerminal("An unknown error occurred.");
     }
 }
 
-
 void ClientGUI::addLineToTerminal(const std::string &line) {
-    // Trim whitespaces
+    // Păstrează exact formatarea originală
     std::string trimmedLine = line;
-    trimmedLine.erase(0, trimmedLine.find_first_not_of(" \t"));
     trimmedLine.erase(trimmedLine.find_last_not_of(" \t") + 1);
     
-    // Only add non-empty lines
     if (!trimmedLine.empty()) {
-        // Add line to terminal history
-        this -> terminalLines.push_back(trimmedLine);
+        float maxWidth = this -> window.getSize().x - 20;
+        
+        sf::Text tempText;
+        tempText.setFont(this -> font);
+        tempText.setCharacterSize(this -> inputText.getCharacterSize());
+        
+        // identify spaces/tabs accurately
+        size_t initialWhitespaceLength = trimmedLine.find_first_not_of(" \t");
+        std::string initialWhitespace = trimmedLine.substr(0, initialWhitespaceLength);
+        std::string remainingText = trimmedLine.substr(initialWhitespaceLength);
+        
+        std::istringstream words(remainingText);
+        std::string word;
+        std::string wrappedLine = initialWhitespace;
+        
+        while (words >> word) {
+            std::string testLine = wrappedLine + word + " ";
+            tempText.setString(testLine);
+            
+            // Check if line exceeds maximum width
+            if (tempText.getGlobalBounds().width > maxWidth) {
+                this -> terminalLines.push_back(wrappedLine);
+                wrappedLine = initialWhitespace + word + " ";
+            } else {
+                wrappedLine += word + " ";
+            }
+        }
+        
+        // Add last line
+        if (!wrappedLine.empty()) {
+            this -> terminalLines.push_back(wrappedLine);
+        }
         
         // Limit terminal history
         if (this -> terminalLines.size() > MAX_HISTORY) {
             this -> terminalLines.erase(
-                                        this -> terminalLines.begin(),
-                                        this -> terminalLines.begin() + (this -> terminalLines.size() - MAX_HISTORY)
-                                        );
+                this -> terminalLines.begin(),
+                this -> terminalLines.begin() + (this -> terminalLines.size() - MAX_HISTORY)
+            );
         }
         
-        // Reset scroll position to bottom
+        // Reset scroll position
         this -> scrollPosition = 0;
         
-        // Update display and scroll bar
+        // Update display
         updateTerminalDisplay();
         updateScrollBar();
         
-        this -> logger.log("[DEBUG](ClientGUI::addLineToTerminal) Added line. Total lines: " +
-                           std::to_string(terminalLines.size()));
+        this -> guiLogger.log("[DEBUG] Terminal line added. Total lines: " +
+                         std::to_string(terminalLines.size()));
     }
 }
 

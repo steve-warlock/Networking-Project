@@ -37,7 +37,7 @@ public:
 private:
     backend::ClientBackend &backend;
     sf::RenderWindow window;
-    logs::Logger logger;
+    logs::Logger guiLogger;
     
     // gui resourses window with input and output text
     sf::Font font;
@@ -52,7 +52,6 @@ private:
     const size_t MAX_VISIBLE_LINES = 30;
     const size_t MAX_HISTORY = 1000;
     float inputYPosition = 0.0f;
-//    float lineHeight = 0.0f;
     
     // cursor
     sf::RectangleShape cursor;
@@ -98,7 +97,10 @@ private:
     void enterEditorMode(const std::string& filename);
     void exitEditorMode(bool save);
     
-//    void processInput(std::string &input, sf::Text &outputText);
+    // command history
+    std::vector<std::string> commandHistory;
+    size_t currentHistoryIndex = -1;
+    void navigateCommandHistory(bool goUp);
     
 };
 

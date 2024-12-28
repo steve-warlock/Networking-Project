@@ -38,6 +38,7 @@ void Logger::log(const std::string& message) {
     
     // Write timestamp and message in the file
     this -> logFile << "[" << timeBuffer << "]" << message << '\n';
+    this -> logFile.flush();
 }
 
 }

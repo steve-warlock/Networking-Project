@@ -3,6 +3,6 @@
 *.tex
 *.pdf
 *.zip
-build/*.dSYM/**
+build/
 logs/
 .vscode/
