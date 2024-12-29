@@ -132,20 +132,20 @@ void ClientGUI::updateCursor() {
     cursor.setSize(sf::Vector2f(2, this -> inputText.getCharacterSize()));
     
     guiLogger.log("[DEBUG](ClientGUI::updateCursor) Cursor positioned at: " +
-               std::to_string(cursorOffset) + ", Position: " + std::to_string(cursorPosition));
+                  std::to_string(cursorOffset) + ", Position: " + std::to_string(cursorPosition));
 }
 
 void ClientGUI::updateTerminalDisplay() {
     try {
         
         size_t maxVisibleLines = std::min(this -> MAX_VISIBLE_LINES,
-                    static_cast<size_t>(this -> window.getSize().y / this -> inputText.getCharacterSize())
-                );
+                                          static_cast<size_t>(this -> window.getSize().y / this -> inputText.getCharacterSize())
+                                          );
         
         std::string displayText;
         
         size_t startIndex = (terminalLines.size() > maxVisibleLines) ?
-                    (terminalLines.size() - maxVisibleLines - scrollPosition) : 0;
+        (terminalLines.size() - maxVisibleLines - scrollPosition) : 0;
         
         // Add output lines
         for (size_t i = startIndex; i < terminalLines.size(); ++i) {
@@ -173,16 +173,16 @@ void ClientGUI::updateTerminalDisplay() {
             this -> inputText.setPosition(0, inputYPosition);
             
             guiLogger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Position Updated: " +
-                       std::to_string(inputYPosition) +
-                       ", Output Height: " + std::to_string(outputHeight));
+                          std::to_string(inputYPosition) +
+                          ", Output Height: " + std::to_string(outputHeight));
         }
         
         
         
         // Debug logging
         this -> guiLogger.log("[DEBUG](ClientGUI::updateTerminalDisplay) Input Y Position: " +
-                           std::to_string(inputYPosition) +
-                           ". Total lines: " + std::to_string(this -> terminalLines.size()));
+                              std::to_string(inputYPosition) +
+                              ". Total lines: " + std::to_string(this -> terminalLines.size()));
     }
     catch (const std::exception& e) {
         // Log any exception that occurs
@@ -219,7 +219,7 @@ void ClientGUI::updateScrollBar() {
     }
     
     guiLogger.log("[DEBUG](ClientGUI::updateScrollBar) Updated scroll bar. Total lines: " + std::to_string(this -> terminalLines.size()) +
-               ", Visible lines: " + std::to_string(maxVisibleLines) + ", Scroll position: " + std::to_string(this -> scrollPosition));
+                  ", Visible lines: " + std::to_string(maxVisibleLines) + ", Scroll position: " + std::to_string(this -> scrollPosition));
     
 }
 
@@ -241,8 +241,8 @@ void ClientGUI::scrollUp(int lines) {
         updateScrollBar();
         
         guiLogger.log("[DEBUG](ClientGUI::scrollUp) Scrolled up " +
-                   std::to_string(lines) + " lines. Current scroll position: " +
-                   std::to_string(this -> scrollPosition));
+                      std::to_string(lines) + " lines. Current scroll position: " +
+                      std::to_string(this -> scrollPosition));
     }
 }
 
@@ -251,25 +251,25 @@ void ClientGUI::scrollDown(int lines) {
     // scroll position to down up to newer lines
     if(this -> scrollPosition > 0){
         this -> scrollPosition = std::max(0, this -> scrollPosition - lines);
-    
+        
         // update display and scrollbar
         updateTerminalDisplay();
         updateScrollBar();
-    
+        
         guiLogger.log("[DEBUG](ClientGUI::scrollDown) Scrolled down " +
-                   std::to_string(lines) + " lines. Current scroll position: " +
-                   std::to_string(this -> scrollPosition));
+                      std::to_string(lines) + " lines. Current scroll position: " +
+                      std::to_string(this -> scrollPosition));
     }
 }
 
 void ClientGUI::navigateCommandHistory(bool goUp) {
     std::string currentPath = this->backend.GetPath() + "> ";
-
+    
     if (this -> commandHistory.empty()) {
         guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) No commands in history.");
         return;
     }
-
+    
     if (goUp) {
         if (this -> currentHistoryIndex == -1) {
             this -> currentHistoryIndex = this -> commandHistory.size() - 1;
@@ -280,30 +280,30 @@ void ClientGUI::navigateCommandHistory(bool goUp) {
         if (this -> currentHistoryIndex == -1) {
             return;
         }
-
+        
         if (this -> currentHistoryIndex < this -> commandHistory.size() - 1) {
             this -> currentHistoryIndex++;
         } else {
             this -> currentHistoryIndex = -1;
         }
     }
-
+    
     if (this -> currentHistoryIndex != -1) {
         std::string fullCommand = currentPath + this -> commandHistory[this -> currentHistoryIndex];
         this -> inputText.setString(fullCommand);
         
         this -> cursorPosition = this -> commandHistory[this -> currentHistoryIndex].length();
-
+        
         guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) Selected command: '" +
                       this -> commandHistory[this -> currentHistoryIndex] +
                       "'. Index: " + std::to_string(this -> currentHistoryIndex));
     } else {
         this -> inputText.setString(currentPath);
         this -> cursorPosition = 0;
-
+        
         guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) Reset to initial state.");
     }
-
+    
     updateCursor();
 }
 
@@ -321,11 +321,11 @@ void ClientGUI::handleSpecialInput(sf::Event event) {
             // Move cursor right, but not beyond input text
             this -> cursorPosition = std::max(0.0f, this -> cursorPosition - 1.0f);
             break;
-        
+            
         case sf::Keyboard::Up:
             navigateCommandHistory(true); // true -> previous commands
             break;
-           
+            
         case sf::Keyboard::Down:
             navigateCommandHistory(false); // false -> next commands
             break;
@@ -340,14 +340,164 @@ void ClientGUI::handleSpecialInput(sf::Event event) {
     
 }
 
-void ClientGUI::processNanoInput(const std::string& input, sf::Text& outputText){
+// nano
+void ClientGUI::processNanoInput(sf::Event event) {
+    if (event.type == sf::Event::KeyPressed) {
+        // Exit nano editor with Ctrl+X
+        if (event.key.code == sf::Keyboard::X &&
+            sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
+            
+            guiLogger.log("[INFO](ClientGUI::processNanoInput) Ctrl+X pressed in Nano Editor. Exiting.");
+            exitNanoEditorMode();
+            return;
+        }
+    }
     
+    // Handle text input in nano mode
+    if (event.type == sf::Event::TextEntered) {
+        if (event.text.unicode < 128) {
+            char inputChar = static_cast<char>(event.text.unicode);
+            
+            // Ensure we have at least one line
+            if (this -> editorLines.empty()) {
+                this -> editorLines.push_back("");
+                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Created empty line in editor.");
+            }
+            
+            // Handle different input characters
+            if (inputChar == '\r' || inputChar == '\n') {
+                // Add new line
+                this -> editorLines.push_back("");
+                this -> cursorPosition = 0;
+                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Added new line in editor.");
+            }
+            else if (inputChar == '\b') {
+                // Backspace logic
+                if (this -> cursorPosition > 0) {
+                    this -> editorLines.back().erase(this -> cursorPosition - 1, 1);
+                    this -> cursorPosition--;
+                    guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Performed backspace in editor.");
+                }
+            }
+            else if (inputChar >= 32 && inputChar <= 126) {
+                // Insert character at cursor position
+                this -> editorLines.back().insert(this -> cursorPosition, 1, inputChar);
+                this -> cursorPosition++;
+                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Inserted character in editor.");
+            }
+            
+            // Refresh terminal display
+            refreshNanoDisplay();
+        }
+    }
+}
+
+void ClientGUI::refreshNanoDisplay() {
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Refreshing nano display.");
+    
+    // Clear previous terminal content
+    this -> terminalLines.clear();
+    
+    // Re-add nano header
+    std::string nanoPrompt = "GNU nano editor";
+    addLineToTerminal(nanoPrompt);
+    addLineToTerminal(""); // Empty line for spacing
+    
+    // Display updated file content
+    for (const auto& line : editorLines) {
+        addLineToTerminal(line);
+    }
+    
+    // Add instructions
+    addLineToTerminal("");
+    addLineToTerminal("^X Exit    ^O Save");
+}
+
+void ClientGUI::enterNanoEditorMode(const std::string& fileContent) {
+    guiLogger.log("[INFO](ClientGUI::enterNanoEditorMode) Entering Nano Editor Mode.");
+    
+    // Set mode to nano editor
+    this -> currentMode = editorMode::EDITTING;
+    
+    // Split file content into lines
+    this -> editorLines = splitFileContent(fileContent);
+    
+    // Log number of lines in the file
+    guiLogger.log("[DEBUG](ClientGUI::enterNanoEditorMode) Loaded file with " +
+                  std::to_string(editorLines.size()) + " lines.");
+    
+    // Clear window texts completely
+    this -> terminalLines.clear();
+    
+    // Set a nano-specific prompt
+    std::string nanoPrompt = "GNU nano editor";
+    addLineToTerminal(nanoPrompt);
+    addLineToTerminal(""); // Empty line for spacing
+    
+    // Display file content
+    for (const auto& line : editorLines) {
+        addLineToTerminal(line);
+    }
+    
+    // Add some nano-like instructions
+    addLineToTerminal("");
+    addLineToTerminal("^X Exit    ^S Save");
+    
+    // Reset input
+    this -> inputText.setString("");
+    
+    // Reset cursor
+    this -> cursorPosition = 0;
+}
+
+void ClientGUI::exitNanoEditorMode() {
+    guiLogger.log("[INFO](ClientGUI::exitNanoEditor) Exiting Nano Editor Mode.");
+    
+    // Reset to normal mode
+    this -> currentMode = editorMode::NORMAL;
+    
+    // Clear terminal lines
+    this -> terminalLines.clear();
+    
+    // Restore terminal state
+    std::string currentPath = this -> backend.GetPath() + "> ";
+    this -> inputText.setString(currentPath);
+    
+    // Clear editor state
+    this -> editorLines.clear();
+    this -> currentEditingFile = "";
+    this -> cursorPosition = 0.0f;
+    
+    guiLogger.log("[DEBUG](ClientGUI::exitNanoEditor) Nano editor state reset.");
+}
+
+std::vector<std::string> ClientGUI::splitFileContent(const std::string& content) {
+    guiLogger.log("[DEBUG](ClientGUI::splitFileContent) Splitting file content. Total length: " +
+                  std::to_string(content.length()) + " bytes.");
+    
+    std::vector<std::string> lines;
+    std::istringstream stream(content);
+    std::string line;
+    
+    while (std::getline(stream, line)) {
+        lines.push_back(line);
+    }
+    
+    // Ensure at least one line
+    if (lines.empty()) {
+        guiLogger.log("[WARN](ClientGUI::splitFileContent) No lines found. Creating empty line.");
+        lines.push_back("");
+    }
+    
+    guiLogger.log("[DEBUG](ClientGUI::splitFileContent) Split result: " + std::to_string(lines.size()) + " lines.");
+    return lines;
 }
 
 void ClientGUI::processInput(sf::Event event) {
     try {
         
         if (currentMode == editorMode::EDITTING) {
+            guiLogger.log("[DEBUG](ClientGUI::processInput) Currently in nano editor mode, processing nano input.");
             return;
         }
         if (event.type == sf::Event::TextEntered) {
@@ -359,6 +509,14 @@ void ClientGUI::processInput(sf::Event event) {
                 // Handle Enter
                 if (inputChar == '\r' || inputChar == '\n') {
                     std::string command;
+                    
+                    if (currentInput == currentPath) {
+                        addLineToTerminal(currentPath);
+                        this -> inputText.setString(currentPath);
+                        guiLogger.log("[DEBUG](ClientGUI::ProcessInput) Empty input, added new line.");
+                        return;
+                    }
+                    
                     if (currentInput.length() > currentPath.length()) {
                         command = currentInput.substr(currentPath.length());
                         this -> commandHistory.push_back(command);
@@ -513,7 +671,7 @@ void ClientGUI::addLineToTerminal(const std::string &line) {
         updateScrollBar();
         
         this -> guiLogger.log("[DEBUG] Terminal line added. Total lines: " +
-                         std::to_string(terminalLines.size()));
+                              std::to_string(terminalLines.size()));
     }
 }
 

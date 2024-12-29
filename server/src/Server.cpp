@@ -149,11 +149,52 @@ std::string Server::executeCommand(const std::string &cmd) {
     return result;
 }
 
+// nano
+std::string Server::handleNanoCommand(const std::string& command) {
+    logger.log("[DEBUG](Server::handleNanoCommand) Received nano command: " + command);
+
+    std::string filename = command.substr(5);
+    
+    try {
+       
+        std::filesystem::path filePath = current_path() / filename;
+
+        logger.log("[DEBUG](Server::handleNanoCommand) Resolved file path: " + filePath.string());
+
+        if (!std::filesystem::exists(filePath)) {
+            std::ofstream newFile(filePath);
+            newFile.close();
+            logger.log("[DEBUG](Server::handleNanoCommand) Created new file: " + filePath.string());
+            return "";
+        }
+
+        std::ifstream file(filePath);
+        std::string content(
+            (std::istreambuf_iterator<char>(file)),
+            std::istreambuf_iterator<char>()
+        );
+
+        logger.log("[INFO](Server::handleNanoCommand) Successfully read file: " + filePath.string() +
+                   ", Content length: " + std::to_string(content.length()) + " bytes");
+
+        return content;
+
+    } catch (const std::exception& e) {
+        logger.log("[ERROR](Server::handleNanoCommand) Failed to handle nano command: " + std::string(e.what()));
+        return "Error: Cannot open file";
+    }
+}
+
 void Server::processCommand(const std::string &command, int clientSocket, std::string &outputBuffer){
     try {
         // special command
         if(command.substr(0,2) == "cd") {
             handleChangeDirectory(command, clientSocket);
+            return;
+        }
+        
+        if(command.substr(0,4) == "nano") {
+            handleNanoCommand(command);
             return;
         }
         
@@ -245,21 +286,32 @@ void Server::handleClient(int clientSocket) {
             logger.log("[DEBUG](Server::handleClient) Exit command received. Closing client with id " + std::to_string(clientSocket) + " connection.");
             std::string response = "Goodbye!";
             send(clientSocket, response.c_str(), response.size(), 0);
-            break; 
+            break;
         }
         
         std::string outputBuffer;
-        processCommand(command, clientSocket, outputBuffer);
+        
+        // Specific handling for nano command
+        if (command.substr(0, 4) == "nano") {
+            outputBuffer = handleNanoCommand(command);
+        } else {
+            processCommand(command, clientSocket, outputBuffer);
+        }
 
         // Send the output or error response back to the client
         {
             std::lock_guard<std::mutex> lock(clientMutex);
             logger.log("[DEBUG](Server::handleClient) Sending response: " + outputBuffer);
+            
+            // always send something back
+            if (outputBuffer.empty()) {
+                outputBuffer = "File opened successfully";
+            }
+            
             send(clientSocket, outputBuffer.c_str(), outputBuffer.size(), 0);
         }
     
         memset(buffer, '\0', sizeof(buffer));
-        
     }
    
     // mutex deconnecting

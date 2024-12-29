@@ -24,6 +24,11 @@
 
 namespace gui {
 
+enum class editorMode {
+    NORMAL,
+    EDITTING
+};
+
 class ClientGUI {
     
 public:
@@ -61,16 +66,10 @@ private:
     float cursorPosition = 0;
     
     
-    // editor text for nano
-    enum class editorMode {
-        NORMAL,
-        EDITTING
-    };
+    // editor member text for nano
     editorMode currentMode = editorMode::NORMAL;
-    std::string editedFileName;
-    std::string editedFileContent;
-    size_t editorCursorPosition = 0;
-    bool ctrlXPressed = false; // ctrl + x for exit in nano
+    std::vector<std::string> editorLines;
+    std::string currentEditingFile;
     
     void initializeWindow();
     void loadFont();
@@ -88,14 +87,16 @@ private:
     void initializeCursor();
     void updateCursor();
     
-    // Process input methods for normal and editing mode
+    // Process input methods
     void processInput(sf::Event event);
-    void processNanoInput(const std::string& input, sf::Text& outputText);
     void handleSpecialInput(sf::Event event);
     
     // editor mode methods
-    void enterEditorMode(const std::string& filename);
-    void exitEditorMode(bool save);
+    void enterNanoEditorMode(const std::string& filecontent);
+    std::vector<std::string>splitFileContent(const std::string& content);
+    void processNanoInput(sf::Event event);
+    void exitNanoEditorMode();
+    void refreshNanoDisplay();
     
     // command history
     std::vector<std::string> commandHistory;

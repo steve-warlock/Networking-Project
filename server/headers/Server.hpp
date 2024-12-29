@@ -55,6 +55,10 @@ private:
     // functions to handle other commands execution
     std::string executeCommand(const std::string& cmd);
     void processCommand(const std::string& command, int clientSocket, std::string& outputBuffer);
+    
+    // nano editor functions
+    std::string handleNanoCommand(const std::string& command);
+    
 };
 
 }
