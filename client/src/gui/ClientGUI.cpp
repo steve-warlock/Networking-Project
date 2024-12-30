@@ -263,7 +263,7 @@ void ClientGUI::scrollDown(int lines) {
 }
 
 void ClientGUI::navigateCommandHistory(bool goUp) {
-    std::string currentPath = this->backend.GetPath() + "> ";
+    std::string currentPath = this -> backend.GetPath() + "> ";
     
     if (this -> commandHistory.empty()) {
         guiLogger.log("[DEBUG](ClientGUI::navigateCommandHistory) No commands in history.");
@@ -342,131 +342,383 @@ void ClientGUI::handleSpecialInput(sf::Event event) {
 
 // nano
 void ClientGUI::processNanoInput(sf::Event event) {
-    if (event.type == sf::Event::KeyPressed) {
-        // Exit nano editor with Ctrl+X
-        if (event.key.code == sf::Keyboard::X &&
-            sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
-            
-            guiLogger.log("[INFO](ClientGUI::processNanoInput) Ctrl+X pressed in Nano Editor. Exiting.");
-            exitNanoEditorMode();
-            return;
-        }
+    // Exit with Ctrl+X
+    if (event.type == sf::Event::KeyPressed &&
+        event.key.code == sf::Keyboard::X &&
+        sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
+        
+        guiLogger.log("[INFO](ClientGUI::processNanoInput) Exiting nano editor.");
+        exitNanoEditorMode();
+        return;
     }
     
-    // Handle text input in nano mode
-    if (event.type == sf::Event::TextEntered) {
-        if (event.text.unicode < 128) {
-            char inputChar = static_cast<char>(event.text.unicode);
-            
-            // Ensure we have at least one line
-            if (this -> editorLines.empty()) {
-                this -> editorLines.push_back("");
-                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Created empty line in editor.");
-            }
-            
-            // Handle different input characters
-            if (inputChar == '\r' || inputChar == '\n') {
-                // Add new line
-                this -> editorLines.push_back("");
-                this -> cursorPosition = 0;
-                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Added new line in editor.");
-            }
-            else if (inputChar == '\b') {
-                // Backspace logic
-                if (this -> cursorPosition > 0) {
-                    this -> editorLines.back().erase(this -> cursorPosition - 1, 1);
-                    this -> cursorPosition--;
-                    guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Performed backspace in editor.");
+    // Save with Ctrl+O
+    if (event.type == sf::Event::KeyPressed &&
+        event.key.code == sf::Keyboard::O &&
+        sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
+        
+        guiLogger.log("[INFO](ClientGUI::processNanoInput) Saving file.");
+        saveNanoFile();
+        return;
+    }
+    
+    // Arrow key navigation
+    if (event.type == sf::Event::KeyPressed) {
+        switch (event.key.code) {
+            case sf::Keyboard::Up:
+                if (this -> nanoCursor.line > 0) {
+                    this -> nanoCursor.line--;
+                    this -> nanoCursor.column = std::min(this -> nanoCursor.column,
+                                                         this->editorLines[this -> nanoCursor.line].length());
                 }
-            }
-            else if (inputChar >= 32 && inputChar <= 126) {
-                // Insert character at cursor position
-                this -> editorLines.back().insert(this -> cursorPosition, 1, inputChar);
-                this -> cursorPosition++;
-                guiLogger.log("[DEBUG](ClientGUI::processNanoInput) Inserted character in editor.");
-            }
-            
-            // Refresh terminal display
-            refreshNanoDisplay();
+                break;
+                
+            case sf::Keyboard::Down:
+                if (this -> nanoCursor.line < this->editorLines.size() - 1) {
+                    this -> nanoCursor.line++;
+                    this -> nanoCursor.column = std::min(this -> nanoCursor.column,
+                                                         this -> editorLines[this -> nanoCursor.line].length());
+                }
+                break;
+                
+            case sf::Keyboard::Left:
+                if (this -> nanoCursor.column > 0) {
+                    this -> nanoCursor.column--;
+                }
+                else if (this -> nanoCursor.line > 0) {
+                    this -> nanoCursor.line--;
+                    this -> nanoCursor.column = this->editorLines[this -> nanoCursor.line].length();
+                }
+                break;
+                
+            case sf::Keyboard::Right:
+                if (this -> nanoCursor.column < this->editorLines[this -> nanoCursor.line].length()) {
+                    this -> nanoCursor.column++;
+                }
+                else if (this -> nanoCursor.line < this -> editorLines.size() - 1) {
+                    this -> nanoCursor.line++;
+                    this -> nanoCursor.column = 0;
+                }
+                break;
+                
+            default:
+                break;
         }
+        
+        refreshNanoDisplay();
+        return;
+    }
+    
+    // Text input processing
+    if (event.type == sf::Event::TextEntered) {
+        char inputChar = static_cast<char>(event.text.unicode);
+        
+        // Ensure at least one line exists
+        if (this -> editorLines.empty()) {
+            this -> editorLines.push_back("");
+            this -> nanoCursor = {0, 0};
+        }
+        
+        switch (inputChar) {
+            case '\r':  // Enter
+            case '\n': {
+                // Split current line at cursor position
+                std::string& currentLine = this -> editorLines[this -> nanoCursor.line];
+                std::string secondPart = currentLine.substr(this -> nanoCursor.column);
+                currentLine = currentLine.substr(0, this -> nanoCursor.column);
+                
+                // Insert new line
+                this->editorLines.insert(
+                                         this->editorLines.begin() + this -> nanoCursor.line + 1,
+                                         secondPart
+                                         );
+                
+                // Move cursor to start of new line
+                nanoCursor.line++;
+                nanoCursor.column = 0;
+                break;
+            }
+                
+            case '\b':  // Backspace
+                if (nanoCursor.column > 0) {
+                    // Remove character before cursor
+                    this->editorLines[nanoCursor.line].erase(
+                                                             nanoCursor.column - 1, 1
+                                                             );
+                    nanoCursor.column--;
+                }
+                else if (nanoCursor.line > 0) {
+                    // Merge with previous line
+                    size_t prevLineLength = this->editorLines[nanoCursor.line - 1].length();
+                    this->editorLines[nanoCursor.line - 1] +=
+                    this->editorLines[nanoCursor.line];
+                    
+                    // Remove current line
+                    this->editorLines.erase(
+                                            this->editorLines.begin() + nanoCursor.line
+                                            );
+                    
+                    // Move cursor
+                    nanoCursor.line--;
+                    nanoCursor.column = prevLineLength;
+                }
+                break;
+                
+            default:
+                // Printable characters
+                if (inputChar >= 32 && inputChar <= 126) {
+                    // Insert character at cursor position
+                    this->editorLines[nanoCursor.line].insert(
+                                                              nanoCursor.column, 1, inputChar
+                                                              );
+                    nanoCursor.column++;
+                }
+                break;
+        }
+        
+        // Redraw
+        refreshNanoDisplay();
+    }
+}
+
+void ClientGUI::saveNanoFile() {
+    try {
+        // Prepare file content
+        std::string fileContent;
+        for (const auto& line : this->editorLines) {
+            fileContent += line + "\n";
+        }
+        
+        // Open local file for writing
+        std::ofstream file(this -> currentEditingFile);
+        if (!file.is_open()) {
+            throw std::runtime_error("Couldn't open file for writing");
+        }
+        
+        // Write content
+        file << fileContent;
+        file.close();
+        
+        // Log and confirm
+        guiLogger.log("[INFO](ClientGUI::saveNanoFile) File saved: " +
+                      this->currentEditingFile);
+        
+        this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
+        
+        refreshNanoDisplay();
+    }
+    catch (const std::exception& e) {
+        guiLogger.log("[ERROR](ClientGUI::saveNanoFile) Save failed: " +
+                      std::string(e.what()));
+        
+        this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
+        refreshNanoDisplay();
     }
 }
 
 void ClientGUI::refreshNanoDisplay() {
-    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Refreshing nano display.");
+    // Log entry point
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Starting nano display refresh");
     
-    // Clear previous terminal content
-    this -> terminalLines.clear();
+    // Prepare content text configuration
+    sf::Text contentText;
+    contentText.setFont(this->font);
+    contentText.setCharacterSize(18);
+    contentText.setFillColor(sf::Color::White);
     
-    // Re-add nano header
-    std::string nanoPrompt = "GNU nano editor";
-    addLineToTerminal(nanoPrompt);
-    addLineToTerminal(""); // Empty line for spacing
+    // Determine visible lines based on window size
+    size_t maxVisibleLines = (window.getSize().y - 100) / 25;
     
-    // Display updated file content
-    for (const auto& line : editorLines) {
-        addLineToTerminal(line);
+    // Log initial scroll state
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Initial scroll state : Line: " + std::to_string(nanoCursor.line) +
+                  ", Scroll Offset: " + std::to_string(nanoCursor.scrollOffset) +
+                  ", Max Visible Lines: " + std::to_string(maxVisibleLines));
+    
+    // Adjust scroll offset if cursor is out of view
+    if (nanoCursor.line < nanoCursor.scrollOffset) {
+        nanoCursor.scrollOffset = nanoCursor.line;
+        guiLogger.log("[INFO](ClientGUI::refreshNanoDisplay) Adjusted scroll offset down");
+    }
+    if (nanoCursor.line >= nanoCursor.scrollOffset + maxVisibleLines) {
+        nanoCursor.scrollOffset = nanoCursor.line - maxVisibleLines + 1;
+        guiLogger.log("[INFO](ClientGUI::refreshNanoDisplay) Adjusted scroll offset up");
     }
     
-    // Add instructions
-    addLineToTerminal("");
-    addLineToTerminal("^X Exit    ^O Save");
+    // Log updated scroll state
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Updated scroll state : Line: " + std::to_string(nanoCursor.line) +
+                  ", Scroll Offset: " + std::to_string(nanoCursor.scrollOffset));
+    
+    // Prepare full line text
+    std::string fullLineText = this->editorLines[nanoCursor.line];
+    contentText.setString(fullLineText);
+    
+    // Calculate cursor position more precisely
+    sf::Text cursorPositionText;
+    cursorPositionText.setFont(this->font);
+    cursorPositionText.setCharacterSize(18);
+    
+    // Get text before cursor
+    std::string textBeforeCursor = fullLineText.substr(0, nanoCursor.column);
+    cursorPositionText.setString(textBeforeCursor);
+    
+    // Find exact cursor position
+    sf::Vector2f cursorPos = cursorPositionText.findCharacterPos(nanoCursor.column);
+    
+    // Create cursor shape
+    sf::RectangleShape cursor;
+    cursor.setSize(sf::Vector2f(2, 20)); // Thin vertical line
+    cursor.setFillColor(sf::Color::White);
+    
+    // Adjust cursor position with slight horizontal offset
+    cursor.setPosition(
+                       cursorPos.x + 10, // Add slight offset to match terminal prompt
+                       50 + (nanoCursor.line - nanoCursor.scrollOffset) * 25
+                       );
+    
+    // Create render texture to reduce flickering
+    sf::RenderTexture renderTexture;
+    renderTexture.create(window.getSize().x, window.getSize().y);
+    renderTexture.clear(sf::Color::Black);
+    
+    // Header text
+    sf::Text headerText;
+    headerText.setFont(this->font);
+    headerText.setCharacterSize(20);
+    headerText.setFillColor(sf::Color::White);
+    headerText.setString("nano: " + currentEditingFile);
+    headerText.setPosition(10, 10);
+    renderTexture.draw(headerText);
+    
+    // Render file content
+    float yPosition = 50;
+    size_t renderedLines = 0;
+    for (size_t i = nanoCursor.scrollOffset;
+         i < std::min(nanoCursor.scrollOffset + maxVisibleLines, this->editorLines.size());
+         ++i) {
+        // Add ">" if line is too long
+        std::string displayLine = this->editorLines[i];
+        bool lineExceedsWidth = false;
+        
+        contentText.setString(displayLine);
+        
+        if (contentText.getLocalBounds().width > window.getSize().x - 30) {
+            size_t truncateIndex = displayLine.length();
+            while (truncateIndex > 0) {
+                contentText.setString(displayLine.substr(0, truncateIndex + 1) + ">");
+                if (contentText.getLocalBounds().width <= window.getSize().x - 30) {
+                    break;
+                }
+                truncateIndex--;
+            }
+            
+            displayLine = displayLine.substr(0, truncateIndex + 3) + ">";
+            lineExceedsWidth = true;
+        }
+        
+        // Dacă cursorul este pe linia respectivă, arată linia întreagă
+        if (lineExceedsWidth && i == nanoCursor.line) {
+            displayLine = this->editorLines[i];
+        }
+        
+        contentText.setString(displayLine);
+        contentText.setPosition(10, yPosition);
+        
+        // Highlight current line
+        if (i == nanoCursor.line) {
+            sf::RectangleShape lineHighlight;
+            lineHighlight.setSize(sf::Vector2f(window.getSize().x, 25));
+            lineHighlight.setPosition(0, yPosition);
+            lineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
+            renderTexture.draw(lineHighlight);
+        }
+        
+        renderTexture.draw(contentText);
+        yPosition += 25;
+        renderedLines++;
+    }
+    
+    // Log rendering details
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Rendered lines: " +
+                  std::to_string(renderedLines) +
+                  ", Total lines: " + std::to_string(this->editorLines.size()));
+    
+    // Footer text
+    sf::Text footerText;
+    footerText.setFont(this->font);
+    footerText.setCharacterSize(16);
+    footerText.setFillColor(sf::Color::Yellow);
+    footerText.setString("^O Save   ^X Exit");
+    footerText.setPosition(10, this->window.getSize().y - 40);
+    renderTexture.draw(footerText);
+    
+    // Draw cursor
+    renderTexture.draw(cursor);
+    
+    // Finalize rendering
+    renderTexture.display();
+    
+    // Display texture
+    sf::Sprite sprite(renderTexture.getTexture());
+    window.draw(sprite);
+    
+    guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Nano display refresh complete");
 }
 
 void ClientGUI::enterNanoEditorMode(const std::string& fileContent) {
+    // Log entry into nano editor mode
     guiLogger.log("[INFO](ClientGUI::enterNanoEditorMode) Entering Nano Editor Mode.");
     
-    // Set mode to nano editor
-    this -> currentMode = editorMode::EDITTING;
+    // reset the cursor to 0
+    this -> nanoCursor = {0, 0};
     
-    // Split file content into lines
-    this -> editorLines = splitFileContent(fileContent);
+    // Set current mode
+    this->currentMode = editorMode::EDITTING;
     
-    // Log number of lines in the file
-    guiLogger.log("[DEBUG](ClientGUI::enterNanoEditorMode) Loaded file with " +
-                  std::to_string(editorLines.size()) + " lines.");
+    // hide terminal cursor
+    this -> cursor.setSize(sf::Vector2f(0, 0));
     
-    // Clear window texts completely
-    this -> terminalLines.clear();
+    // Save filename
+    this->currentEditingFile = fileContent;
     
-    // Set a nano-specific prompt
-    std::string nanoPrompt = "GNU nano editor";
-    addLineToTerminal(nanoPrompt);
-    addLineToTerminal(""); // Empty line for spacing
+    // Reset editor lines
+    this->editorLines.clear();
     
-    // Display file content
-    for (const auto& line : editorLines) {
-        addLineToTerminal(line);
+    // Request file content from server
+    std::string fileFullContent = this->backend.sendCommand("nano " + fileContent);
+    
+    // Split content into lines
+    std::istringstream contentStream(fileFullContent);
+    std::string line;
+    while (std::getline(contentStream, line)) {
+        this->editorLines.push_back(line);
     }
     
-    // Add some nano-like instructions
-    addLineToTerminal("");
-    addLineToTerminal("^X Exit    ^S Save");
+    // Add empty line if no content
+    if (this->editorLines.empty()) {
+        this->editorLines.push_back("");
+    }
     
-    // Reset input
-    this -> inputText.setString("");
-    
-    // Reset cursor
-    this -> cursorPosition = 0;
+    // Logging
+    guiLogger.log("[DEBUG](ClientGUI::enterNanoEditorMode) Loaded " +
+                  std::to_string(this->editorLines.size()) + " lines.");
 }
 
 void ClientGUI::exitNanoEditorMode() {
     guiLogger.log("[INFO](ClientGUI::exitNanoEditor) Exiting Nano Editor Mode.");
     
     // Reset to normal mode
-    this -> currentMode = editorMode::NORMAL;
+    this->currentMode = editorMode::NORMAL;
     
-    // Clear terminal lines
-    this -> terminalLines.clear();
+    // reset terminal cursor state
+    this -> cursor.setSize(sf::Vector2f(2, this -> inputText.getCharacterSize()));
+    
+    // Reset editor state
+    this->editorLines.clear();
+    this->currentEditingFile = "";
     
     // Restore terminal state
-    std::string currentPath = this -> backend.GetPath() + "> ";
-    this -> inputText.setString(currentPath);
-    
-    // Clear editor state
-    this -> editorLines.clear();
-    this -> currentEditingFile = "";
-    this -> cursorPosition = 0.0f;
+    std::string currentPath = this->backend.GetPath() + "> ";
+    this->inputText.setString(currentPath);
     
     guiLogger.log("[DEBUG](ClientGUI::exitNanoEditor) Nano editor state reset.");
 }
@@ -498,6 +750,7 @@ void ClientGUI::processInput(sf::Event event) {
         
         if (currentMode == editorMode::EDITTING) {
             guiLogger.log("[DEBUG](ClientGUI::processInput) Currently in nano editor mode, processing nano input.");
+            processInput(event);
             return;
         }
         if (event.type == sf::Event::TextEntered) {
@@ -536,6 +789,20 @@ void ClientGUI::processInput(sf::Event event) {
                                     addLineToTerminal("Changed directory to: " + newPath);
                                 } else {
                                     addLineToTerminal(response);
+                                }
+                            } else if (command.substr(0, 4) == "nano") { // check if the command is nano
+                                std::string fileContent = this->backend.sendCommand(command);
+                                
+                                guiLogger.log("[DEBUG](ClientGUI::ProcessInput) Server response for nano: " + fileContent);
+                                
+                                if (fileContent.find("Error") == std::string::npos) {
+                                    // Enter nano editor mode
+                                    std::string filename = command.substr(5);
+                                    this -> currentMode = editorMode::EDITTING;
+                                    enterNanoEditorMode(filename);
+                                    return;
+                                } else {
+                                    addLineToTerminal(fileContent);
                                 }
                             } else // check if the command is exit
                                 if (command == "exit") {
@@ -658,9 +925,9 @@ void ClientGUI::addLineToTerminal(const std::string &line) {
         // Limit terminal history
         if (this -> terminalLines.size() > MAX_HISTORY) {
             this -> terminalLines.erase(
-                this -> terminalLines.begin(),
-                this -> terminalLines.begin() + (this -> terminalLines.size() - MAX_HISTORY)
-            );
+                                        this -> terminalLines.begin(),
+                                        this -> terminalLines.begin() + (this -> terminalLines.size() - MAX_HISTORY)
+                                        );
         }
         
         // Reset scroll position
@@ -676,8 +943,7 @@ void ClientGUI::addLineToTerminal(const std::string &line) {
 }
 
 void ClientGUI::run() {
-    
-    // smooth trackpad movement
+    // Smooth trackpad movement accumulator
     float trackpadScrollAccumulator = 0.0f;
     
     while (window.isOpen()) {
@@ -688,56 +954,76 @@ void ClientGUI::run() {
                 return;
             }
             
-            if (event.type == sf::Event::TextEntered) {
-                processInput(event);
+            // Mode-specific processing
+            if (currentMode == editorMode::EDITTING) {
+                processNanoInput(event);
+            } else {
+                // Normal processing
+                if (event.type == sf::Event::TextEntered) {
+                    processInput(event);
+                }
+                
+                if (event.type == sf::Event::KeyPressed) {
+                    handleSpecialInput(event);
+                }
             }
             
-            if (event.type == sf::Event::KeyPressed) {
-                handleSpecialInput(event);
-            }
-            
-            if(event.type == sf::Event::MouseWheelScrolled) {
+            // Scroll handling
+            if (event.type == sf::Event::MouseWheelScrolled) {
                 trackpadScrollAccumulator += event.mouseWheelScroll.delta;
-                if(std::abs(trackpadScrollAccumulator) >= 1.0f) {
+                if (std::abs(trackpadScrollAccumulator) >= 1.0f) {
                     int scrollLines = static_cast<int>(trackpadScrollAccumulator);
-                    if(scrollLines > 0) { // positive means go down
+                    if (scrollLines > 0) { // Positive means scroll down
                         scrollUp(1);
                     }
-                    else if(scrollLines < 0) { // negative means go up
+                    else if (scrollLines < 0) { // Negative means scroll up
                         scrollDown(1);
                     }
                 }
                 trackpadScrollAccumulator = 0.0f;
             }
+        }
+        
+        // Update based on current mode
+        if (currentMode == editorMode::EDITTING) {
+            // Nano editor mode updates
+            updateCursor();
+        } else {
+            // Normal mode updates
+            updateCursor();
+            updateTerminalDisplay();
+            updateScrollBar();
+        }
+        
+        // Clear window
+        window.clear(sf::Color::Black);
+        
+        // Drawing based on current mode
+        if (currentMode == editorMode::EDITTING) {
+            // Nano editor drawing
+            window.clear(sf::Color::Black);
+            refreshNanoDisplay();
+            window.display();
+        } else {
+            // for normal mode
+            window.clear(sf::Color::Black);
+            updateCursor();
+            updateTerminalDisplay();
+            updateScrollBar();
             
+            if (!outputText.getString().isEmpty()) {
+                window.draw(outputText);
+            }
+            
+            window.draw(inputText);
+            window.draw(cursor);
+            
+            if (scrollBar.getSize().y > 0) {
+                window.draw(scrollBar);
+            }
+            
+            window.display();
         }
-        
-        updateCursor();
-        updateTerminalDisplay();
-        updateScrollBar();
-        
-        this -> window.clear(sf::Color::Black);
-        
-        if (!this -> outputText.getString().isEmpty()) {
-            this -> window.draw(outputText);
-        }
-        
-        this -> window.draw(this -> inputText);
-        
-        // Cursor blinking mechanism
-        if (this -> cursorBlinkClock.getElapsedTime() >= this -> cursorBlinkInterval) {
-            this -> cursorVisible = !this -> cursorVisible;
-            this -> cursor.setFillColor(this -> cursorVisible ? sf::Color::White : sf::Color::Transparent);
-            this -> cursorBlinkClock.restart();
-        }
-        
-        this -> window.draw(this -> cursor);
-        
-        if (this -> scrollBar.getSize().y > 0) {
-            this -> window.draw(this -> scrollBar);
-        }
-        
-        this -> window.display();
     }
 }
 

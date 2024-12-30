@@ -194,7 +194,8 @@ void Server::processCommand(const std::string &command, int clientSocket, std::s
         }
         
         if(command.substr(0,4) == "nano") {
-            handleNanoCommand(command);
+            outputBuffer = handleNanoCommand(command);
+            send(clientSocket, outputBuffer.c_str(), outputBuffer.length(), 0);
             return;
         }
         
@@ -292,21 +293,12 @@ void Server::handleClient(int clientSocket) {
         std::string outputBuffer;
         
         // Specific handling for nano command
-        if (command.substr(0, 4) == "nano") {
-            outputBuffer = handleNanoCommand(command);
-        } else {
-            processCommand(command, clientSocket, outputBuffer);
-        }
+        processCommand(command, clientSocket, outputBuffer);
 
         // Send the output or error response back to the client
         {
             std::lock_guard<std::mutex> lock(clientMutex);
             logger.log("[DEBUG](Server::handleClient) Sending response: " + outputBuffer);
-            
-            // always send something back
-            if (outputBuffer.empty()) {
-                outputBuffer = "File opened successfully";
-            }
             
             send(clientSocket, outputBuffer.c_str(), outputBuffer.size(), 0);
         }

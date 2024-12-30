@@ -29,6 +29,13 @@ enum class editorMode {
     EDITTING
 };
 
+struct NanoCursor {
+    size_t line = 0;   // Current line
+    size_t column = 0; // Current column
+    size_t scrollOffset = 0; // cursor offset
+};
+
+
 class ClientGUI {
     
 public:
@@ -51,7 +58,6 @@ private:
     
     // terminal
     std::vector<std::string> terminalLines;
-    size_t scrollOffset = 0;
     sf::RectangleShape scrollBar;
     int scrollPosition = 0;
     const size_t MAX_VISIBLE_LINES = 30;
@@ -70,6 +76,7 @@ private:
     editorMode currentMode = editorMode::NORMAL;
     std::vector<std::string> editorLines;
     std::string currentEditingFile;
+    NanoCursor nanoCursor = {0, 0};
     
     void initializeWindow();
     void loadFont();
@@ -95,6 +102,7 @@ private:
     void enterNanoEditorMode(const std::string& filecontent);
     std::vector<std::string>splitFileContent(const std::string& content);
     void processNanoInput(sf::Event event);
+    void saveNanoFile();
     void exitNanoEditorMode();
     void refreshNanoDisplay();
     
