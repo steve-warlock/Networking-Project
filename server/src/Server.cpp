@@ -195,7 +195,6 @@ void Server::processCommand(const std::string &command, int clientSocket, std::s
         
         if(command.substr(0,4) == "nano") {
             outputBuffer = handleNanoCommand(command);
-            send(clientSocket, outputBuffer.c_str(), outputBuffer.length(), 0);
             return;
         }
         
@@ -280,14 +279,13 @@ void Server::handleClient(int clientSocket) {
 
         logger.log("[DEBUG](Server::handleClient) Received command: " + command);
 
-        // Trim trailing newline and backspaces characters from the command
-        command = cleanedCommand(command);
-
         if (command == "exit") {
             logger.log("[DEBUG](Server::handleClient) Exit command received. Closing client with id " + std::to_string(clientSocket) + " connection.");
             std::string response = "Goodbye!";
+            logger.log("[DEBUG](Server::handleClient) Sending exit response: " + response);
             send(clientSocket, response.c_str(), response.size(), 0);
-            break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            return;
         }
         
         std::string outputBuffer;

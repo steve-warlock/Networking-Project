@@ -505,14 +505,12 @@ void ClientGUI::saveNanoFile() {
         
         this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
         
-        refreshNanoDisplay();
     }
     catch (const std::exception& e) {
         guiLogger.log("[ERROR](ClientGUI::saveNanoFile) Save failed: " +
                       std::string(e.what()));
         
         this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
-        refreshNanoDisplay();
     }
 }
 
@@ -523,7 +521,7 @@ void ClientGUI::refreshNanoDisplay() {
     // Prepare content text configuration
     sf::Text contentText;
     contentText.setFont(this->font);
-    contentText.setCharacterSize(18);
+    contentText.setCharacterSize(20);
     contentText.setFillColor(sf::Color::White);
     
     // Determine visible lines based on window size
@@ -555,7 +553,7 @@ void ClientGUI::refreshNanoDisplay() {
     // Calculate cursor position more precisely
     sf::Text cursorPositionText;
     cursorPositionText.setFont(this->font);
-    cursorPositionText.setCharacterSize(18);
+    cursorPositionText.setCharacterSize(20);
     
     // Get text before cursor
     std::string textBeforeCursor = fullLineText.substr(0, nanoCursor.column);
@@ -615,7 +613,6 @@ void ClientGUI::refreshNanoDisplay() {
             lineExceedsWidth = true;
         }
         
-        // Dacă cursorul este pe linia respectivă, arată linia întreagă
         if (lineExceedsWidth && i == nanoCursor.line) {
             displayLine = this->editorLines[i];
         }
@@ -646,25 +643,28 @@ void ClientGUI::refreshNanoDisplay() {
     sf::Text footerText;
     footerText.setFont(this->font);
     footerText.setCharacterSize(16);
-    footerText.setFillColor(sf::Color::Yellow);
+    footerText.setFillColor(sf::Color::Green);
     footerText.setString("^O Save   ^X Exit");
-    footerText.setPosition(10, this->window.getSize().y - 40);
+    footerText.setPosition(10, this -> window.getSize().y - 40);
     renderTexture.draw(footerText);
+    
+    // get sprite textures
+    sf::Sprite sprite(renderTexture.getTexture());
     
     // Draw cursor
     renderTexture.draw(cursor);
     
     // Finalize rendering
     renderTexture.display();
-    
+    this -> window.clear();
     // Display texture
-    sf::Sprite sprite(renderTexture.getTexture());
-    window.draw(sprite);
+    this -> window.draw(sprite);
+    this -> window.display();
     
     guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Nano display refresh complete");
 }
 
-void ClientGUI::enterNanoEditorMode(const std::string& fileContent) {
+void ClientGUI::enterNanoEditorMode(const std::string& fileContent, const std::string& fileName) {
     // Log entry into nano editor mode
     guiLogger.log("[INFO](ClientGUI::enterNanoEditorMode) Entering Nano Editor Mode.");
     
@@ -678,19 +678,18 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent) {
     this -> cursor.setSize(sf::Vector2f(0, 0));
     
     // Save filename
-    this->currentEditingFile = fileContent;
+    this->currentEditingFile = fileName;
     
     // Reset editor lines
     this->editorLines.clear();
     
-    // Request file content from server
-    std::string fileFullContent = this->backend.sendCommand("nano " + fileContent);
-    
     // Split content into lines
-    std::istringstream contentStream(fileFullContent);
-    std::string line;
-    while (std::getline(contentStream, line)) {
-        this->editorLines.push_back(line);
+    if(!fileContent.empty()){
+        std::istringstream contentStream(fileContent);
+        std::string line;
+        while (std::getline(contentStream, line)) {
+            this->editorLines.push_back(line);
+        }
     }
     
     // Add empty line if no content
@@ -701,6 +700,8 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent) {
     // Logging
     guiLogger.log("[DEBUG](ClientGUI::enterNanoEditorMode) Loaded " +
                   std::to_string(this->editorLines.size()) + " lines.");
+    
+    refreshNanoDisplay();
 }
 
 void ClientGUI::exitNanoEditorMode() {
@@ -750,7 +751,7 @@ void ClientGUI::processInput(sf::Event event) {
         
         if (currentMode == editorMode::EDITTING) {
             guiLogger.log("[DEBUG](ClientGUI::processInput) Currently in nano editor mode, processing nano input.");
-            processInput(event);
+            processNanoInput(event);
             return;
         }
         if (event.type == sf::Event::TextEntered) {
@@ -791,15 +792,24 @@ void ClientGUI::processInput(sf::Event event) {
                                     addLineToTerminal(response);
                                 }
                             } else if (command.substr(0, 4) == "nano") { // check if the command is nano
-                                std::string fileContent = this->backend.sendCommand(command);
                                 
+                                std::string fullPath = command.substr(5);
+                                std::string fileName = std::filesystem::path(fullPath).filename().string();
+                                std::string fileContent = this -> backend.sendCommand(command);
+                                if(fileContent.substr(0,4) == "nano"){
+                                    fileContent.substr(5);
+                                }
                                 guiLogger.log("[DEBUG](ClientGUI::ProcessInput) Server response for nano: " + fileContent);
                                 
                                 if (fileContent.find("Error") == std::string::npos) {
                                     // Enter nano editor mode
-                                    std::string filename = command.substr(5);
                                     this -> currentMode = editorMode::EDITTING;
-                                    enterNanoEditorMode(filename);
+                                    if(!fileContent.empty()){
+                                        enterNanoEditorMode(fileContent, fileName);
+                                    }
+                                    else {
+                                        enterNanoEditorMode("", fileName);
+                                    }
                                     return;
                                 } else {
                                     addLineToTerminal(fileContent);
@@ -957,14 +967,16 @@ void ClientGUI::run() {
             // Mode-specific processing
             if (currentMode == editorMode::EDITTING) {
                 processNanoInput(event);
-            } else {
+            } else if(currentMode == editorMode::NORMAL) {
                 // Normal processing
                 if (event.type == sf::Event::TextEntered) {
                     processInput(event);
                 }
                 
                 if (event.type == sf::Event::KeyPressed) {
-                    handleSpecialInput(event);
+                    if (currentMode != editorMode::EDITTING) {
+                        handleSpecialInput(event);
+                    }
                 }
             }
             
@@ -984,28 +996,28 @@ void ClientGUI::run() {
             }
         }
         
+        // Cursor blinking logic for normal mode
+        if (this -> currentMode == editorMode::NORMAL) {
+            if (this -> cursorBlinkClock.getElapsedTime() >= this -> cursorBlinkInterval) {
+                this -> cursorVisible = !this -> cursorVisible;
+                this -> cursorBlinkClock.restart();
+                
+                this -> cursor.setFillColor(this -> cursorVisible ?
+                                            sf::Color::White : sf::Color::Transparent);
+            }
+        }
+        
+        // for unified drawing
+        window.clear(sf::Color::Black);
+        
         // Update based on current mode
         if (currentMode == editorMode::EDITTING) {
             // Nano editor mode updates
-            updateCursor();
-        } else {
-            // Normal mode updates
-            updateCursor();
-            updateTerminalDisplay();
-            updateScrollBar();
-        }
-        
-        // Clear window
-        window.clear(sf::Color::Black);
-        
-        // Drawing based on current mode
-        if (currentMode == editorMode::EDITTING) {
-            // Nano editor drawing
             window.clear(sf::Color::Black);
             refreshNanoDisplay();
             window.display();
         } else {
-            // for normal mode
+            // Normal mode updates
             window.clear(sf::Color::Black);
             updateCursor();
             updateTerminalDisplay();

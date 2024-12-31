@@ -71,7 +71,7 @@ std::string ClientBackend::sendCommand(const std::string &command) {
     
     logger.log("[DEBUG](ClientBackend::sendCommand) Received response from server: " + response);
     
-    return std::string(response);
+    return response;
 }
 
 void ClientBackend::SetPath(std::string& new_path){

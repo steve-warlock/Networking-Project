@@ -99,7 +99,7 @@ private:
     void handleSpecialInput(sf::Event event);
     
     // editor mode methods
-    void enterNanoEditorMode(const std::string& filecontent);
+    void enterNanoEditorMode(const std::string& fileContent, const std::string& fileName);
     std::vector<std::string>splitFileContent(const std::string& content);
     void processNanoInput(sf::Event event);
     void saveNanoFile();
