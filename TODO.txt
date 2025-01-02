@@ -1,6 +1,5 @@
-1. Add the path in shell input line -> Done and Improved cd functionality and added support for arrow and delete keys 
-2. Improved GUI -> horizontal split
+1. Add the path in shell input line -> Done and Improved cd functionality and added support for arrow and delete keys
+2. Improved GUI -> horizontal split 
                 -> vertical split
-                -> open terminal text editors -> it works but I need some improvements on long line string
-
-3. Add terminal view with history, scrollbar -> done scrollbar
+                -> open terminal text editors -> it works but I need some improvements on long line string. I've done some mods, hope it works!
+3. add terminal view with history and commands history mr aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

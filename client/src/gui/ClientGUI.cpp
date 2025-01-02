@@ -358,6 +358,8 @@ void ClientGUI::processNanoInput(sf::Event event) {
         sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
         
         guiLogger.log("[INFO](ClientGUI::processNanoInput) Saving file.");
+        this->nanoCursor.column = 0;
+        this->nanoCursor.line = 0;
         saveNanoFile();
         return;
     }
@@ -503,15 +505,48 @@ void ClientGUI::saveNanoFile() {
         guiLogger.log("[INFO](ClientGUI::saveNanoFile) File saved: " +
                       this->currentEditingFile);
         
-        this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
+        this -> savedMessage = "File Saved!";
         
+        refreshNanoDisplay();
     }
     catch (const std::exception& e) {
         guiLogger.log("[ERROR](ClientGUI::saveNanoFile) Save failed: " +
                       std::string(e.what()));
         
-        this -> editorLines.push_back("File saved: " + this -> currentEditingFile);
+        this -> savedMessage = "Save Failed!";
     }
+}
+
+std::vector<std::string> ClientGUI::wrapLines(const std::string& originalLine, float maxWidth) {
+    std::vector<std::string> wrappedLines;
+    sf::Text testText;
+    testText.setFont(this->font);
+    testText.setCharacterSize(20);
+
+    std::string remainingText = originalLine;
+    while (!remainingText.empty()) {
+        std::string wrappedPart;
+        
+        // longest part of the line
+        for (size_t j = remainingText.length(); j > 0; --j) {
+            testText.setString(remainingText.substr(0, j));
+            if (testText.getLocalBounds().width <= maxWidth) {
+                wrappedPart = remainingText.substr(0, j);
+                remainingText = remainingText.substr(j);
+                break;
+            }
+        }
+        
+        // only the first character
+        if (wrappedPart.empty()) {
+            wrappedPart = remainingText.substr(0, 1);
+            remainingText = remainingText.substr(1);
+        }
+        
+        wrappedLines.push_back(wrappedPart);
+    }
+
+    return wrappedLines;
 }
 
 void ClientGUI::refreshNanoDisplay() {
@@ -526,6 +561,15 @@ void ClientGUI::refreshNanoDisplay() {
     
     // Determine visible lines based on window size
     size_t maxVisibleLines = (window.getSize().y - 100) / 25;
+    float maxWidth = window.getSize().x - 30;
+    std::vector<std::string> fullWrappedLines;
+    for (size_t i = nanoCursor.scrollOffset;
+            i < std::min(nanoCursor.scrollOffset + maxVisibleLines, this->editorLines.size());
+            ++i) {
+        std::vector<std::string> currentfullWrappedLines = wrapLines(this->editorLines[i], maxWidth);
+        fullWrappedLines.insert(fullWrappedLines.end(), currentfullWrappedLines.begin(), currentfullWrappedLines.end());
+    }
+    
     
     // Log initial scroll state
     guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Initial scroll state : Line: " + std::to_string(nanoCursor.line) +
@@ -589,54 +633,25 @@ void ClientGUI::refreshNanoDisplay() {
     
     // Render file content
     float yPosition = 50;
-    size_t renderedLines = 0;
-    for (size_t i = nanoCursor.scrollOffset;
-         i < std::min(nanoCursor.scrollOffset + maxVisibleLines, this->editorLines.size());
-         ++i) {
-        // Add ">" if line is too long
-        std::string displayLine = this->editorLines[i];
-        bool lineExceedsWidth = false;
-        
-        contentText.setString(displayLine);
-        
-        if (contentText.getLocalBounds().width > window.getSize().x - 30) {
-            size_t truncateIndex = displayLine.length();
-            while (truncateIndex > 0) {
-                contentText.setString(displayLine.substr(0, truncateIndex + 1) + ">");
-                if (contentText.getLocalBounds().width <= window.getSize().x - 30) {
-                    break;
-                }
-                truncateIndex--;
+        for (size_t i = 0; i < fullWrappedLines.size() && i < maxVisibleLines; ++i) {
+            contentText.setString(fullWrappedLines[i]);
+            contentText.setPosition(10, yPosition);
+
+            if (i == nanoCursor.line - nanoCursor.scrollOffset) {
+                sf::RectangleShape lineHighlight;
+                lineHighlight.setSize(sf::Vector2f(window.getSize().x, 25));
+                lineHighlight.setPosition(0, yPosition);
+                lineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
+                renderTexture.draw(lineHighlight);
             }
-            
-            displayLine = displayLine.substr(0, truncateIndex + 3) + ">";
-            lineExceedsWidth = true;
+
+            renderTexture.draw(contentText);
+            yPosition += 25;
         }
-        
-        if (lineExceedsWidth && i == nanoCursor.line) {
-            displayLine = this->editorLines[i];
-        }
-        
-        contentText.setString(displayLine);
-        contentText.setPosition(10, yPosition);
-        
-        // Highlight current line
-        if (i == nanoCursor.line) {
-            sf::RectangleShape lineHighlight;
-            lineHighlight.setSize(sf::Vector2f(window.getSize().x, 25));
-            lineHighlight.setPosition(0, yPosition);
-            lineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
-            renderTexture.draw(lineHighlight);
-        }
-        
-        renderTexture.draw(contentText);
-        yPosition += 25;
-        renderedLines++;
-    }
     
     // Log rendering details
     guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Rendered lines: " +
-                  std::to_string(renderedLines) +
+                  std::to_string(fullWrappedLines.size()) +
                   ", Total lines: " + std::to_string(this->editorLines.size()));
     
     // Footer text
@@ -644,15 +659,45 @@ void ClientGUI::refreshNanoDisplay() {
     footerText.setFont(this->font);
     footerText.setCharacterSize(16);
     footerText.setFillColor(sf::Color::Green);
-    footerText.setString("^O Save   ^X Exit");
-    footerText.setPosition(10, this -> window.getSize().y - 40);
+    static std::string lastSavedMessage;
+    static sf::Clock messageClock;
+    
+    if (!savedMessage.empty()) {
+        lastSavedMessage = this -> savedMessage;
+        messageClock.restart();  // reset clock after each message
+        this -> savedMessage.clear();    // clear old message
+    }
+    
+    // hold the text for 2 seconds
+    if (messageClock.getElapsedTime().asSeconds() <= 2.0f && !lastSavedMessage.empty()) {
+        footerText.setFillColor(sf::Color::Green);
+        footerText.setString("^O Save   ^X Exit      " + lastSavedMessage);
+    } else {
+        lastSavedMessage.clear();
+        footerText.setFillColor(sf::Color::Green);
+        footerText.setString("^O Save   ^X Exit");
+    }
+    
+    footerText.setPosition(10, this->window.getSize().y - 30);
     renderTexture.draw(footerText);
     
     // get sprite textures
     sf::Sprite sprite(renderTexture.getTexture());
     
     // Draw cursor
-    renderTexture.draw(cursor);
+    if (nanoCursor.line >= nanoCursor.scrollOffset && nanoCursor.line < nanoCursor.scrollOffset + maxVisibleLines) {
+            sf::Text cursorText;
+            cursorText.setFont(this->font);
+            cursorText.setCharacterSize(20);
+            cursorText.setString(this->editorLines[nanoCursor.line].substr(0, nanoCursor.column));
+            sf::Vector2f cursorPos = cursorText.findCharacterPos(nanoCursor.column);
+
+            sf::RectangleShape cursor;
+            cursor.setSize(sf::Vector2f(2, 20)); // Thin vertical line
+            cursor.setFillColor(sf::Color::White);
+            cursor.setPosition(10 + cursorPos.x, 50 + (nanoCursor.line - nanoCursor.scrollOffset) * 25);
+            renderTexture.draw(cursor);
+        }
     
     // Finalize rendering
     renderTexture.display();
@@ -669,7 +714,7 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent, const std::s
     guiLogger.log("[INFO](ClientGUI::enterNanoEditorMode) Entering Nano Editor Mode.");
     
     // reset the cursor to 0
-    this -> nanoCursor = {0, 0};
+    this -> nanoCursor = {0, 0, 0};
     
     // Set current mode
     this->currentMode = editorMode::EDITTING;
@@ -684,16 +729,13 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent, const std::s
     this->editorLines.clear();
     
     // Split content into lines
-    if(!fileContent.empty()){
+    if(!fileContent.empty()) {
         std::istringstream contentStream(fileContent);
         std::string line;
         while (std::getline(contentStream, line)) {
             this->editorLines.push_back(line);
         }
-    }
-    
-    // Add empty line if no content
-    if (this->editorLines.empty()) {
+    } else {
         this->editorLines.push_back("");
     }
     
@@ -802,9 +844,10 @@ void ClientGUI::processInput(sf::Event event) {
                                 guiLogger.log("[DEBUG](ClientGUI::ProcessInput) Server response for nano: " + fileContent);
                                 
                                 if (fileContent.find("Error") == std::string::npos) {
+                                    bool fileMode = (fileContent == "NEW_FILE");
                                     // Enter nano editor mode
                                     this -> currentMode = editorMode::EDITTING;
-                                    if(!fileContent.empty()){
+                                    if(!fileMode){
                                         enterNanoEditorMode(fileContent, fileName);
                                     }
                                     else {

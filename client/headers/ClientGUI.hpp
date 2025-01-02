@@ -21,6 +21,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <filesystem>
+#include <thread>
 
 namespace gui {
 
@@ -77,6 +78,7 @@ private:
     std::vector<std::string> editorLines;
     std::string currentEditingFile;
     NanoCursor nanoCursor = {0, 0};
+    std::string savedMessage;
     
     void initializeWindow();
     void loadFont();
@@ -101,6 +103,7 @@ private:
     // editor mode methods
     void enterNanoEditorMode(const std::string& fileContent, const std::string& fileName);
     std::vector<std::string>splitFileContent(const std::string& content);
+    std::vector<std::string> wrapLines(const std::string& originalLine, float maxWid);
     void processNanoInput(sf::Event event);
     void saveNanoFile();
     void exitNanoEditorMode();

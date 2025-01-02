@@ -165,7 +165,7 @@ std::string Server::handleNanoCommand(const std::string& command) {
             std::ofstream newFile(filePath);
             newFile.close();
             logger.log("[DEBUG](Server::handleNanoCommand) Created new file: " + filePath.string());
-            return "";
+            return "NEW_FILE";
         }
 
         std::ifstream file(filePath);
@@ -177,7 +177,7 @@ std::string Server::handleNanoCommand(const std::string& command) {
         logger.log("[INFO](Server::handleNanoCommand) Successfully read file: " + filePath.string() +
                    ", Content length: " + std::to_string(content.length()) + " bytes");
 
-        return content;
+        return content.empty() ? "NEW_FILE" : content;
 
     } catch (const std::exception& e) {
         logger.log("[ERROR](Server::handleNanoCommand) Failed to handle nano command: " + std::string(e.what()));
