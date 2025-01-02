@@ -522,7 +522,7 @@ std::vector<std::string> ClientGUI::wrapLines(const std::string& originalLine, f
     sf::Text testText;
     testText.setFont(this->font);
     testText.setCharacterSize(20);
-
+    
     std::string remainingText = originalLine;
     while (!remainingText.empty()) {
         std::string wrappedPart;
@@ -545,7 +545,7 @@ std::vector<std::string> ClientGUI::wrapLines(const std::string& originalLine, f
         
         wrappedLines.push_back(wrappedPart);
     }
-
+    
     return wrappedLines;
 }
 
@@ -564,8 +564,8 @@ void ClientGUI::refreshNanoDisplay() {
     float maxWidth = window.getSize().x - 30;
     std::vector<std::string> fullWrappedLines;
     for (size_t i = nanoCursor.scrollOffset;
-            i < std::min(nanoCursor.scrollOffset + maxVisibleLines, this->editorLines.size());
-            ++i) {
+         i < std::min(nanoCursor.scrollOffset + maxVisibleLines, this->editorLines.size());
+         ++i) {
         std::vector<std::string> currentfullWrappedLines = wrapLines(this->editorLines[i], maxWidth);
         fullWrappedLines.insert(fullWrappedLines.end(), currentfullWrappedLines.begin(), currentfullWrappedLines.end());
     }
@@ -633,21 +633,21 @@ void ClientGUI::refreshNanoDisplay() {
     
     // Render file content
     float yPosition = 50;
-        for (size_t i = 0; i < fullWrappedLines.size() && i < maxVisibleLines; ++i) {
-            contentText.setString(fullWrappedLines[i]);
-            contentText.setPosition(10, yPosition);
-
-            if (i == nanoCursor.line - nanoCursor.scrollOffset) {
-                sf::RectangleShape lineHighlight;
-                lineHighlight.setSize(sf::Vector2f(window.getSize().x, 25));
-                lineHighlight.setPosition(0, yPosition);
-                lineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
-                renderTexture.draw(lineHighlight);
-            }
-
-            renderTexture.draw(contentText);
-            yPosition += 25;
+    for (size_t i = 0; i < fullWrappedLines.size() && i < maxVisibleLines; ++i) {
+        contentText.setString(fullWrappedLines[i]);
+        contentText.setPosition(10, yPosition);
+        
+        if (i == nanoCursor.line - nanoCursor.scrollOffset) {
+            sf::RectangleShape lineHighlight;
+            lineHighlight.setSize(sf::Vector2f(window.getSize().x, 25));
+            lineHighlight.setPosition(0, yPosition);
+            lineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
+            renderTexture.draw(lineHighlight);
         }
+        
+        renderTexture.draw(contentText);
+        yPosition += 25;
+    }
     
     // Log rendering details
     guiLogger.log("[DEBUG](ClientGUI::refreshNanoDisplay) Rendered lines: " +
@@ -686,18 +686,18 @@ void ClientGUI::refreshNanoDisplay() {
     
     // Draw cursor
     if (nanoCursor.line >= nanoCursor.scrollOffset && nanoCursor.line < nanoCursor.scrollOffset + maxVisibleLines) {
-            sf::Text cursorText;
-            cursorText.setFont(this->font);
-            cursorText.setCharacterSize(20);
-            cursorText.setString(this->editorLines[nanoCursor.line].substr(0, nanoCursor.column));
-            sf::Vector2f cursorPos = cursorText.findCharacterPos(nanoCursor.column);
-
-            sf::RectangleShape cursor;
-            cursor.setSize(sf::Vector2f(2, 20)); // Thin vertical line
-            cursor.setFillColor(sf::Color::White);
-            cursor.setPosition(10 + cursorPos.x, 50 + (nanoCursor.line - nanoCursor.scrollOffset) * 25);
-            renderTexture.draw(cursor);
-        }
+        sf::Text cursorText;
+        cursorText.setFont(this->font);
+        cursorText.setCharacterSize(20);
+        cursorText.setString(this->editorLines[nanoCursor.line].substr(0, nanoCursor.column));
+        sf::Vector2f cursorPos = cursorText.findCharacterPos(nanoCursor.column);
+        
+        sf::RectangleShape cursor;
+        cursor.setSize(sf::Vector2f(2, 20)); // Thin vertical line
+        cursor.setFillColor(sf::Color::White);
+        cursor.setPosition(10 + cursorPos.x, 50 + (nanoCursor.line - nanoCursor.scrollOffset) * 25);
+        renderTexture.draw(cursor);
+    }
     
     // Finalize rendering
     renderTexture.display();
@@ -766,6 +766,429 @@ void ClientGUI::exitNanoEditorMode() {
     guiLogger.log("[DEBUG](ClientGUI::exitNanoEditor) Nano editor state reset.");
 }
 
+// pane functions
+void ClientGUI::createNewPane(SplitType splitType){
+    if (panes.size() >= 4) {
+        guiLogger.log("[WARN](ClientGUI::createNewPane) Maximum number of panes reached.");
+        return;
+    }
+    
+    // create the current pane
+    if (panes.empty()) {
+       // First pane is added by default
+        Pane firstPane;
+        firstPane.terminalLines = this->terminalLines;
+        firstPane.currentPath = this->backend.GetPath();
+        firstPane.currentInput = this->inputText.getString();
+        firstPane.scrollPosition = this->scrollPosition;
+        firstPane.splitType = splitType;
+        
+        // text for input and output
+        firstPane.inputText.setFont(this->font);
+        firstPane.outputText.setFont(this->font);
+        firstPane.inputText.setCharacterSize(20);
+        firstPane.outputText.setCharacterSize(20);
+        firstPane.inputText.setFillColor(sf::Color::White);
+        firstPane.outputText.setFillColor(sf::Color::White);
+        
+        // Cursor initialization
+        firstPane.cursor.setSize(sf::Vector2f(2, firstPane.inputText.getCharacterSize()));
+        firstPane.cursor.setFillColor(sf::Color::White);
+        firstPane.cursorBlinkClock.restart();
+
+       panes.push_back(firstPane);
+    }
+
+    // add the new pane
+    Pane newPane = panes[0];
+    newPane.splitType = splitType;
+    panes.push_back(newPane);
+
+    // set the index of the new pane
+    this -> currentPaneIndex = panes.size() - 1;
+    
+    updatePaneBounds();
+    
+    // reset terminal
+    this->terminalLines.clear();
+    this->backend.SetPath(newPane.currentPath);
+    this->inputText.setString(newPane.currentPath + "> ");
+    this->scrollPosition = 0;
+    
+    guiLogger.log("[DEBUG](ClientGUI::createNewPane) Created new pane. Total panes: " + std::to_string(panes.size()) + ", Split type: " + (splitType == SplitType::HORIZONTAL ? "Horizontal" : "Vertical"));
+}
+
+void ClientGUI::updatePaneBounds(){
+    sf::Vector2u windowSize = window.getSize();
+    size_t paneCount = panes.size();
+    
+    switch(paneCount) {
+        case 2: {
+            // Split in half
+            if (panes[0].splitType == SplitType::HORIZONTAL) {
+                // Split orizontal
+                panes[0].bounds = sf::FloatRect(0, 0, windowSize.x, windowSize.y / 2);
+                panes[1].bounds = sf::FloatRect(0, windowSize.y / 2, windowSize.x, windowSize.y / 2);
+            } else {
+                // Split vertical
+                panes[0].bounds = sf::FloatRect(0, 0, windowSize.x / 2, windowSize.y);
+                panes[1].bounds = sf::FloatRect(windowSize.x / 2, 0, windowSize.x / 2, windowSize.y);
+            }
+            break;
+        }
+            
+        case 3: {
+            // first split + a supposed third pane
+            if (panes[0].splitType == SplitType::HORIZONTAL) {
+                // Split orizontal + third pane
+                panes[0].bounds = sf::FloatRect(0, 0, windowSize.x, windowSize.y / 2);
+                panes[1].bounds = sf::FloatRect(0, windowSize.y / 2, windowSize.x / 2, windowSize.y / 2);
+                panes[2].bounds = sf::FloatRect(windowSize.x / 2, windowSize.y / 2, windowSize.x / 2, windowSize.y / 2);
+            } else {
+                // Split vertical + third pane
+                panes[0].bounds = sf::FloatRect(0, 0, windowSize.x / 2, windowSize.y);
+                panes[1].bounds = sf::FloatRect(windowSize.x / 2, 0, windowSize.x / 2, windowSize.y / 2);
+                panes[2].bounds = sf::FloatRect(windowSize.x / 2, windowSize.y / 2, windowSize.x / 2, windowSize.y / 2);
+            }
+            break;
+        }
+            
+        case 4: {
+            // all 4 panes
+            panes[0].bounds = sf::FloatRect(0, 0, windowSize.x / 2, windowSize.y / 2);
+            panes[1].bounds = sf::FloatRect(windowSize.x / 2, 0, windowSize.x / 2, windowSize.y / 2);
+            panes[2].bounds = sf::FloatRect(0, windowSize.y / 2, windowSize.x / 2, windowSize.y / 2);
+            panes[3].bounds = sf::FloatRect(windowSize.x / 2, windowSize.y / 2, windowSize.x / 2, windowSize.y / 2);
+            break;
+        }
+    }
+    
+    // Log pentru debugging
+    guiLogger.log("[DEBUG](ClientGUI::updatePaneBounds) Updated bounds for " +
+                  std::to_string(paneCount) + " panes.");
+}
+
+void ClientGUI::updatePaneTerminalDisplay(Pane& pane) {
+    // available height
+    float availableHeight = pane.bounds.height;
+    float characterHeight = 16;
+    size_t maxVisibleLines = static_cast<size_t>(availableHeight / characterHeight);
+    
+    // line limiting for the size
+    std::vector<std::string> visibleLines = pane.terminalLines;
+    if (visibleLines.size() > maxVisibleLines) {
+        visibleLines = std::vector<std::string>(
+                                                visibleLines.end() - maxVisibleLines,
+                                                visibleLines.end()
+                                                );
+    }
+    
+    // convert line to text
+    std::string displayText;
+    for (const auto& line : visibleLines) {
+        displayText += line + "\n";
+    }
+    if (!displayText.empty()) {
+        displayText.pop_back(); // get rid of the last newline
+    }
+    
+    // Set the text
+    pane.outputText.setFont(this->font);
+    pane.outputText.setCharacterSize(16);
+    pane.outputText.setFillColor(sf::Color::White);
+    pane.outputText.setString(displayText);
+    pane.outputText.setPosition(pane.bounds.left, pane.bounds.top);
+    
+    // Set the input line
+    std::string currentPath = pane.currentPath;
+    pane.inputText.setFont(this->font);
+    pane.inputText.setCharacterSize(16);
+    pane.inputText.setFillColor(sf::Color::White);
+    pane.inputText.setString(currentPath + "> ");
+    pane.inputText.setPosition(
+                          pane.bounds.left,
+                          pane.bounds.top + pane.bounds.height - inputText.getCharacterSize()
+                          );
+    
+    updatePaneBounds();
+    
+    guiLogger.log("[DEBUG](ClientGUI::updatePaneTerminalDisplay) Pane updated. Total lines: " +
+                      std::to_string(pane.terminalLines.size()) +
+                      ", Visible lines: " + std::to_string(visibleLines.size()));
+    
+}
+
+void ClientGUI::updatePaneScrollBar(Pane& pane) {
+    // get the height of the pane
+    float availableHeight = pane.bounds.height;
+    float characterHeight = inputText.getCharacterSize();
+    size_t maxVisibleLines = static_cast<size_t>(availableHeight / characterHeight);
+
+    // check if the scrollbar is required
+    if (pane.terminalLines.size() > maxVisibleLines) {
+        // get the height of the scrollbar
+        float scrollBarHeight = (static_cast<float>(maxVisibleLines) / pane.terminalLines.size()) * pane.bounds.height;
+        
+        // compute the offset of the scrollbar
+        float scrollBarPosition = pane.bounds.top +
+            ((pane.terminalLines.size() - maxVisibleLines - pane.scrollPosition) /
+             static_cast<float>(pane.terminalLines.size())) * pane.bounds.height;
+
+        // Set the scrollbar itself
+        scrollBar.setSize(sf::Vector2f(10, scrollBarHeight));
+        scrollBar.setPosition(
+            pane.bounds.left + pane.bounds.width - 15,
+            scrollBarPosition
+        );
+        scrollBar.setFillColor(sf::Color(100, 100, 100, 200));
+    } else {
+        // Hide the scrollbar
+        scrollBar.setSize(sf::Vector2f(0, 0));
+    }
+}
+
+void ClientGUI::updatePaneCursor(Pane& pane) {
+    // pane's path
+    std::string currentPath = pane.currentPath + "> ";
+    
+    // get the font for width computation
+    const sf::Font* font = inputText.getFont();
+    
+    // get the full input
+    std::string fullInput = pane.currentInput;
+    std::string currentInput = fullInput.substr(currentPath.length());
+    
+    // the cursor does not exceed the inputs length
+    float maxCursorPosition = static_cast<float>(currentInput.length());
+    
+    // tempText to get the last character's pos
+    sf::Text tempText;
+    tempText.setFont(*font);
+    tempText.setCharacterSize(inputText.getCharacterSize());
+    tempText.setString(currentPath + currentInput);
+    
+    // get the last input character
+    float cursorOffset = tempText.findCharacterPos(currentPath.length() + static_cast<int>(cursorPosition)).x;
+    
+    // cursor set
+    cursor.setPosition(
+        pane.bounds.left + cursorOffset,
+        pane.bounds.top + pane.bounds.height - inputText.getCharacterSize() + 3
+    );
+    cursor.setSize(sf::Vector2f(2, inputText.getCharacterSize()));
+    
+    // logger
+    guiLogger.log("[DEBUG] Pane cursor positioned at: " +
+                  std::to_string(cursorOffset));
+}
+
+void ClientGUI::switchPane(int direction) {
+    if (panes.empty()) return;
+    
+    panes[currentPaneIndex].terminalLines = this->terminalLines;
+    panes[currentPaneIndex].currentPath = this->backend.GetPath();
+    panes[currentPaneIndex].currentInput = this->inputText.getString();
+    panes[currentPaneIndex].scrollPosition = this->scrollPosition;
+    
+    currentPaneIndex = (currentPaneIndex + direction + panes.size()) % panes.size();
+    
+    Pane& newPane = panes[currentPaneIndex];
+    this->terminalLines = newPane.terminalLines;
+    this->backend.SetPath(newPane.currentPath);
+    this->inputText.setString(newPane.currentInput);
+    this->scrollPosition = newPane.scrollPosition;
+}
+
+void ClientGUI::closeCurrentPane() {
+    if (panes.size() <= 1) {
+        
+        this->terminalLines.clear();
+        std::string terminal_path = backend.GetPath();
+        this->backend.SetPath(terminal_path);
+        this->inputText.setString(backend.GetPath() + "> ");
+        this->scrollPosition = 0;
+        
+        panes.clear();
+        currentPaneIndex = 0;
+    } else {
+        panes.erase(panes.begin() + currentPaneIndex);
+        
+        updatePaneBounds();
+        
+        currentPaneIndex = std::min(currentPaneIndex, panes.size() - 1);
+        
+        Pane& remainingPane = panes[currentPaneIndex];
+        this->terminalLines = remainingPane.terminalLines;
+        this->backend.SetPath(remainingPane.currentPath);
+        this->inputText.setString(remainingPane.currentInput);
+        this->scrollPosition = remainingPane.scrollPosition;
+    }
+}
+
+void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
+    // Check if the event is text input
+    if (event.type == sf::Event::TextEntered) {
+        // Ensure we're dealing with a printable character
+        if (event.text.unicode < 128) {
+            char inputChar = static_cast<char>(event.text.unicode);
+            
+            // Construct current path with prompt
+            std::string currentPath = currentPane.currentPath + "> ";
+            std::string currentInput = currentPane.currentInput;
+            
+            // Get reference to cursor position
+            float& cursorPosition = currentPane.cursorPosition;
+            
+            // Handle Enter key (execute command)
+            if (inputChar == '\r' || inputChar == '\n') {
+                // Extract command from input
+                std::string command = currentInput.substr(currentPath.length());
+                
+                if (!command.empty()) {
+                    // Send command to backend
+                    std::string response = this->backend.sendCommand(command);
+                    
+                    // Add command to terminal lines
+                    currentPane.terminalLines.push_back(currentInput);
+                    
+                    // Process response
+                    std::istringstream responseStream(response);
+                    std::string line;
+                    while (std::getline(responseStream, line)) {
+                        currentPane.terminalLines.push_back(line);
+                    }
+                    
+                    // Reset input and cursor
+                    currentPane.currentInput = currentPath;
+                    currentPane.inputText.setString(currentPath);
+                    cursorPosition = 0.0f;
+                }
+            }
+            // Handle Backspace
+            else if (inputChar == '\b') {
+                if (cursorPosition > 0) {
+                    // Remove character before cursor
+                    currentInput.erase(currentPath.length() + cursorPosition - 1, 1);
+                    currentPane.currentInput = currentInput;
+                    currentPane.inputText.setString(currentInput);
+                    cursorPosition--;
+                }
+            }
+            // Handle character input
+            else {
+                // Limit input length
+                if (currentInput.length() < currentPath.length() + 256) {
+                    // Insert character at cursor position
+                    currentInput.insert(currentPath.length() + cursorPosition, 1, inputChar);
+                    currentPane.currentInput = currentInput;
+                    currentPane.inputText.setString(currentInput);
+                    cursorPosition++;
+                }
+            }
+        }
+    }
+}
+
+void ClientGUI::handlePaneSpecialInput(sf::Event event, Pane& currentPane) {
+    // Check if a key is pressed
+    if (event.type == sf::Event::KeyPressed) {
+        switch (event.key.code) {
+            case sf::Keyboard::Right:
+                // Move cursor right, but not beyond input text
+                currentPane.cursorPosition = std::min(
+                    static_cast<float>(currentPane.currentInput.length() -
+                    (currentPane.currentPath + "> ").length()),
+                    currentPane.cursorPosition + 1.0f
+                );
+                break;
+                
+            case sf::Keyboard::Left:
+                // Move cursor left, but not beyond start
+                currentPane.cursorPosition = std::max(0.0f, currentPane.cursorPosition - 1.0f);
+                break;
+                
+            case sf::Keyboard::Up:
+                // Navigate to previous commands
+                navigatePaneCommandHistory(currentPane, true);
+                break;
+                
+            case sf::Keyboard::Down:
+                // Navigate to next commands
+                navigatePaneCommandHistory(currentPane, false);
+                break;
+                
+            default:
+                break;
+        }
+        
+        // Log cursor movement for debugging
+        guiLogger.log("[DEBUG](ClientGUI::handlePaneSpecialInput) Pane special input made");
+    }
+}
+
+void ClientGUI::navigatePaneCommandHistory(Pane& currentPane, bool goUp) {
+    // Get current path with prompt
+    std::string currentPath = currentPane.currentPath + "> ";
+    
+    // Check if command history is empty
+    if (currentPane.paneCommandHistory.empty()) {
+        guiLogger.log("[DEBUG](ClientGUI::navigatePaneCommandHistory) No commands in pane history.");
+        return;
+    }
+    
+    // Navigate through command history
+    if (goUp) {
+        // If no index selected, start from the last command
+        if (currentPane.paneCommandHistoryIndex == -1) {
+            currentPane.paneCommandHistoryIndex = currentPane.paneCommandHistory.size() - 1;
+        }
+        // Move to previous command if possible
+        else if (currentPane.paneCommandHistoryIndex > 0) {
+            currentPane.paneCommandHistoryIndex--;
+        }
+    } else {
+        // If no index selected, do nothing
+        if (currentPane.paneCommandHistoryIndex == -1) {
+            return;
+        }
+        
+        // Move to next command
+        if (currentPane.paneCommandHistoryIndex < currentPane.paneCommandHistory.size() - 1) {
+            currentPane.paneCommandHistoryIndex++;
+        }
+        // Reset to initial state if at the end of history
+        else {
+            currentPane.paneCommandHistoryIndex = -1;
+        }
+    }
+    
+    // Update input based on selected history item
+    if (currentPane.paneCommandHistoryIndex != -1) {
+        // Construct full command with path
+        std::string fullCommand = currentPath +
+            currentPane.paneCommandHistory[currentPane.paneCommandHistoryIndex];
+        
+        // Update pane input
+        currentPane.currentInput = fullCommand;
+        currentPane.inputText.setString(fullCommand);
+        
+        // Set cursor position to end of command
+        currentPane.cursorPosition =
+        currentPane.paneCommandHistory[currentPane.paneCommandHistoryIndex].length();
+        
+        guiLogger.log("[DEBUG](ClientGUI::navigatePaneCommandHistory) Pane command selected: '" +
+                      currentPane.paneCommandHistory[currentPane.paneCommandHistoryIndex] +
+                      "'. Index: " + std::to_string(currentPane.paneCommandHistoryIndex));
+    } else {
+        // Reset to initial state
+        currentPane.currentInput = currentPath;
+        currentPane.inputText.setString(currentPath);
+        currentPane.cursorPosition = 0;
+        
+        guiLogger.log("[DEBUG](ClientGUI::navigatePaneCommandHistory) Pane command history reset.");
+    }
+}
+
 std::vector<std::string> ClientGUI::splitFileContent(const std::string& content) {
     guiLogger.log("[DEBUG](ClientGUI::splitFileContent) Splitting file content. Total length: " +
                   std::to_string(content.length()) + " bytes.");
@@ -796,6 +1219,13 @@ void ClientGUI::processInput(sf::Event event) {
             processNanoInput(event);
             return;
         }
+        if (!panes.empty()) {
+            // Work with the current pane
+            Pane& currentPane = panes[currentPaneIndex];
+            
+            // Process input for the current pane
+            processPaneInput(event, currentPane);
+        } else
         if (event.type == sf::Event::TextEntered) {
             if (event.text.unicode < 128) {
                 char inputChar = static_cast<char>(event.text.unicode);
@@ -1007,18 +1437,57 @@ void ClientGUI::run() {
                 return;
             }
             
+            if(event.type == sf::Event::KeyPressed) {
+                if(sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
+                    switch(event.key.code) {
+                        case sf::Keyboard::H: // horizontal
+                            createNewPane(SplitType::HORIZONTAL);
+                            break;
+                        case sf::Keyboard::V: // vertical
+                            createNewPane(SplitType::VERTICAL);
+                            break;
+                        case sf::Keyboard::Tab: // horizontal
+                        {
+                            if(sf::Keyboard::isKeyPressed(sf::Keyboard::LShift)){
+                                switchPane(-1); // move backwards
+                            }
+                            else switchPane(1);
+                        }
+                            break;
+                        case sf::Keyboard::W:
+                            closeCurrentPane();
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+            
             // Mode-specific processing
             if (currentMode == editorMode::EDITTING) {
                 processNanoInput(event);
             } else if(currentMode == editorMode::NORMAL) {
                 // Normal processing
-                if (event.type == sf::Event::TextEntered) {
-                    processInput(event);
-                }
-                
-                if (event.type == sf::Event::KeyPressed) {
-                    if (currentMode != editorMode::EDITTING) {
-                        handleSpecialInput(event);
+                if(this -> panes.empty()){
+                    if (event.type == sf::Event::TextEntered) {
+                        processInput(event);
+                    }
+                    
+                    if (event.type == sf::Event::KeyPressed) {
+                        if (currentMode != editorMode::EDITTING) {
+                            handleSpecialInput(event);
+                        }
+                    }
+                } else {
+                    Pane& currentPane = panes[currentPaneIndex];
+                    if (event.type == sf::Event::TextEntered) {
+                        processPaneInput(event, currentPane);
+                    }
+                    
+                    if (event.type == sf::Event::KeyPressed) {
+                        if (currentMode != editorMode::EDITTING) {
+                            handlePaneSpecialInput(event, currentPane);
+                        }
                     }
                 }
             }
@@ -1061,21 +1530,81 @@ void ClientGUI::run() {
             window.display();
         } else {
             // Normal mode updates
-            window.clear(sf::Color::Black);
-            updateCursor();
-            updateTerminalDisplay();
-            updateScrollBar();
-            
-            if (!outputText.getString().isEmpty()) {
-                window.draw(outputText);
+            if (panes.empty()) {
+                // Mod fără pane-uri
+                updateCursor();
+                updateTerminalDisplay();
+                updateScrollBar();
+                
+                if (!outputText.getString().isEmpty()) {
+                    window.draw(outputText);
+                }
+                
+                window.draw(inputText);
+                window.draw(cursor);
+                
+                if (scrollBar.getSize().y > 0) {
+                    window.draw(scrollBar);
+                }
+            } else {
+                // Pane mods
+                for (auto& pane : panes) {
+                    // view for every pane
+                    sf::View paneView(sf::FloatRect(0, 0, window.getSize().x, window.getSize().y));
+                    window.setView(paneView);
+                    
+                    pane.outputText.setCharacterSize(16);
+                    pane.inputText.setCharacterSize(16);
+                    
+                    window.draw(pane.outputText);
+                    window.draw(pane.inputText);
+                    window.draw(pane.cursor);
+                    
+                    // Save the curent state
+                    auto tempTerminalLines = terminalLines;
+                    auto tempCurrentPath = backend.GetPath();
+                    auto tempInputString = inputText.getString();
+                    auto tempScrollPosition = scrollPosition;
+                    
+                    // Restore the pane state
+                    terminalLines = pane.terminalLines;
+                    backend.SetPath(pane.currentPath);
+                    inputText.setString(pane.currentInput);
+                    scrollPosition = pane.scrollPosition;
+                    
+                    // Divider line
+                    sf::RectangleShape divider;
+                    divider.setFillColor(sf::Color(100, 100, 100, 200)); // Semi-transparent Gray
+                    divider.setSize(sf::Vector2f(window.getSize().x, 2));
+                    
+                    if (panes.size() > 1) {
+                        if (pane.splitType == SplitType::HORIZONTAL) {
+                            divider.setPosition(0, window.getSize().y / 2 - 1);
+                        } else {
+                            divider.setPosition(window.getSize().x / 2 - 1, 0);
+                            divider.setSize(sf::Vector2f(2, window.getSize().y));
+                        }
+                        window.draw(divider);
+                    }
+                    
+                    // Update the pane content on the screen
+                    updatePaneCursor(pane);
+                    updatePaneTerminalDisplay(pane);
+                    updatePaneScrollBar(pane);
+                    
+                   
+                  
+                    
+                    // Restore the previous state
+                    terminalLines = tempTerminalLines;
+                    backend.SetPath(tempCurrentPath);
+                    inputText.setString(tempInputString);
+                    scrollPosition = tempScrollPosition;
+                }
             }
             
-            window.draw(inputText);
-            window.draw(cursor);
-            
-            if (scrollBar.getSize().y > 0) {
-                window.draw(scrollBar);
-            }
+            // Restore the original view
+            window.setView(window.getDefaultView());
             
             window.display();
         }

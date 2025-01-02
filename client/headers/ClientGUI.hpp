@@ -37,6 +37,36 @@ struct NanoCursor {
 };
 
 
+enum class SplitType {
+    NONE,
+    HORIZONTAL,
+    VERTICAL
+};
+
+struct Pane {
+    std::vector<std::string> terminalLines;
+    std::string currentPath;
+    std::string currentInput;
+    float scrollPosition = 0;
+    SplitType splitType = SplitType::NONE;
+    sf::FloatRect bounds;
+    sf::FloatRect dividerLine;
+    
+    // input and output text
+    sf::Text inputText;
+    sf::Text outputText;
+    
+    // cursor
+    sf::RectangleShape cursor;
+    float cursorPosition = 0.0f;
+    bool cursorVisible = true;
+    sf::Clock cursorBlinkClock;
+    
+    // commandHistory
+    std::vector<std::string> paneCommandHistory;
+    size_t paneCommandHistoryIndex = -1;
+};
+
 class ClientGUI {
     
 public:
@@ -108,6 +138,23 @@ private:
     void saveNanoFile();
     void exitNanoEditorMode();
     void refreshNanoDisplay();
+    
+    // pane management variables
+    std::vector<Pane> panes;
+    size_t currentPaneIndex = 0;
+    
+    // pane functions
+    void createNewPane(SplitType splitType);
+    void updatePaneBounds();
+    void updatePaneTerminalDisplay(Pane& pane);
+    void updatePaneScrollBar(Pane& pane);
+    void updatePaneCursor(Pane& pane);
+    void switchPane(int direction);
+    void processPaneInput(sf::Event event, Pane& currentPane);
+    void navigatePaneCommandHistory(Pane& currentPane, bool goUp);
+    void handlePaneSpecialInput(sf::Event event, Pane& currentPane);
+    void closeCurrentPane();
+
     
     // command history
     std::vector<std::string> commandHistory;
