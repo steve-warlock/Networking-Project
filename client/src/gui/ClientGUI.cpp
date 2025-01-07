@@ -841,6 +841,7 @@ void ClientGUI::createNewPane(SplitType splitType) {
             std::string path = backend.GetPath();
             initialPane.backend -> SetPath(path);
             initialPane.currentInput = initialPane.backend -> GetPath() + "> ";
+            initialPane.inputText.setString(initialPane.currentInput);
             
             // Text configuration
             initialPane.inputText.setFont(font);
@@ -849,13 +850,12 @@ void ClientGUI::createNewPane(SplitType splitType) {
             initialPane.outputText.setCharacterSize(16);
             initialPane.inputText.setFillColor(sf::Color::White);
             initialPane.outputText.setFillColor(sf::Color::White);
+            initialPane.outputText.setString("");
             
             // Initialize cursor
             initialPane.cursor.setSize(sf::Vector2f(2, 16));
             initialPane.cursor.setFillColor(sf::Color::White);
             
-            // Initial terminal line
-            // addLineToPaneTerminal(initialPane, initialPane.currentInput);
             
             panes.push_back(std::move(initialPane));
             
@@ -874,7 +874,7 @@ void ClientGUI::createNewPane(SplitType splitType) {
         std::string path = current_path().string();
         newPane.backend -> SetPath(path);
         newPane.currentInput = newPane.backend -> GetPath() + "> ";
-        
+        newPane.inputText.setString(newPane.currentInput);
         // Text configuration
         newPane.inputText.setFont(font);
         newPane.outputText.setFont(font);
@@ -886,7 +886,7 @@ void ClientGUI::createNewPane(SplitType splitType) {
             newPane.bounds.left + 10,  // Relative to pane's left bound
             newPane.bounds.top + 50    // With a consistent vertical offset
         );
-        
+        newPane.outputText.setString("");
         // Initialize cursor
         newPane.cursor.setSize(sf::Vector2f(2, 16));
         newPane.cursor.setFillColor(sf::Color::White);
@@ -1108,79 +1108,67 @@ void ClientGUI::updatePaneBounds() {
 }
 
 void ClientGUI::updatePaneTerminalDisplay(Pane& pane) {
-    // Constants
-    const float TITLE_HEIGHT = 30.0f;
-    const float CHAR_HEIGHT = 16.0f;
-    const float LINE_SPACING = 4.0f;
-    const float LINE_HEIGHT = CHAR_HEIGHT + LINE_SPACING;
-    const float PADDING = 10.0f;
-    const sf::Font* font = pane.inputText.getFont();
-    
-    // Configure title
-    sf::Text titleText;
-    titleText.setFont(*font);
-    titleText.setCharacterSize(20);
-    titleText.setFillColor(sf::Color::White);
-    titleText.setString("Pane " + std::to_string(currentPaneIndex + 1));
-    titleText.setPosition(pane.bounds.left + PADDING, pane.bounds.top + PADDING);
-
-    // Configure input line
-    pane.inputText.setFont(*font);
-    pane.inputText.setCharacterSize(CHAR_HEIGHT);
-    pane.inputText.setFillColor(sf::Color::White);
-    std::string currentPath = pane.backend->GetPath() + "> ";
-    if (!pane.currentInput.starts_with(currentPath)) {
-        pane.currentInput = currentPath;
+    try {
+        // Constants
+        const float TITLE_HEIGHT = 30.0f;
+        const float CHAR_HEIGHT = 16.0f;
+        const float LINE_SPACING = 4.0f;
+        const float LINE_HEIGHT = CHAR_HEIGHT + LINE_SPACING;
+        const float PADDING = 10.0f;
+        const sf::Font* font = pane.inputText.getFont();
+        
+        size_t maxVisibleLines = std::min(static_cast<size_t>(pane.bounds.height / CHAR_HEIGHT), pane.terminalLines.size());
+        size_t startIndex = (pane.terminalLines.size() > maxVisibleLines) ? (pane.terminalLines.size() - maxVisibleLines + pane.scrollPosition) : 0;
+        
+        // Prepare visible content
+        std::string displayText;
+        for (size_t i = startIndex; i < pane.terminalLines.size(); ++i) {
+            displayText += (pane.terminalLines[i] + "\n");
+        }
+        
+        // Remove trailing new line
+        if (!displayText.empty()) {
+            displayText.pop_back();
+        }
+        
+        // Configure title
+        sf::Text titleText;
+        titleText.setFont(*font);
+        titleText.setCharacterSize(20);
+        titleText.setFillColor(sf::Color::White);
+        titleText.setString("Pane " + std::to_string(currentPaneIndex + 1));
+        titleText.setPosition(pane.bounds.left + PADDING, pane.bounds.top + PADDING);
+        
+        // Update output text
+        pane.outputText.setFont(*font);
+        pane.outputText.setCharacterSize(CHAR_HEIGHT);
+        pane.outputText.setFillColor(sf::Color::White);
+        pane.outputText.setString(displayText);
+        pane.outputText.setPosition(pane.bounds.left + PADDING, pane.bounds.top + TITLE_HEIGHT + PADDING);
+        
+        // Calculate input Y position
+        float outputHeight = pane.outputText.getLocalBounds().height;
+        float newInputYPosition = pane.bounds.top + TITLE_HEIGHT + outputHeight + PADDING + 5;
+        
+        // Update input text position
+        pane.inputText.setFont(*font);
+        pane.inputText.setCharacterSize(CHAR_HEIGHT);
+        pane.inputText.setFillColor(sf::Color::White);
+        pane.inputText.setPosition(pane.bounds.left + PADDING, newInputYPosition);
+        
+        
+        // Update cursor and scrollbar
+        updatePaneCursor(pane);
+        updatePaneScrollBar(pane);
+        
+        guiLogger.log("[DEBUG](ClientGUI::updatePaneTerminalDisplay) Input Y Position: " +
+                      std::to_string(newInputYPosition) +
+                      ". Total lines: " + std::to_string(pane.terminalLines.size()));
+    } catch(const std::exception& e) {
+        guiLogger.log("[ERROR](ClientGUI::updatePaneTerminalDisplay) Exception: " + std::string(e.what()));
+    } catch (...) {
+        guiLogger.log("[ERROR](ClientGUI::updatePaneTerminalDisplay) Unknown exception occurred");
     }
-    pane.inputText.setString(pane.currentInput);
-    pane.inputText.setPosition(
-        pane.bounds.left + PADDING,
-        pane.bounds.top + TITLE_HEIGHT + PADDING
-    );
-
-    // Calculate content area
-    float contentTop = pane.bounds.top + TITLE_HEIGHT + LINE_HEIGHT;
-    float contentHeight = pane.bounds.height - contentTop;
-    int maxVisibleLines = static_cast<int>(contentHeight / LINE_HEIGHT);
-
-    // Prepare visible content
-    std::vector<std::string> visibleLines;
-    if (pane.terminalLines.size() > maxVisibleLines) {
-        size_t startIdx = pane.terminalLines.size() - maxVisibleLines + pane.scrollPosition;
-                visibleLines = std::vector<std::string>(
-                    pane.terminalLines.begin() + startIdx,
-                    pane.terminalLines.end()
-                );
-    } else {
-        visibleLines = pane.terminalLines;
-    }
-
-    // Build display text
-    std::string displayText;
-    for (const auto& line : visibleLines) {
-        displayText += line + "\n";
-    }
-
-    // Configure and position output text
-    pane.outputText.setFont(*font);
-    pane.outputText.setCharacterSize(CHAR_HEIGHT);
-    pane.outputText.setFillColor(sf::Color::White);
-    pane.outputText.setString(displayText);
-    pane.outputText.setPosition(pane.bounds.left + PADDING, contentTop);
-
-    
-
-    // Draw title
-    window.draw(titleText);
-    window.draw(pane.inputText);
-    window.draw(pane.outputText);
-    
-    // Update cursor and scrollbar
-    updatePaneCursor(pane);
-    updatePaneScrollBar(pane);
-
-    guiLogger.log("[DEBUG](ClientGUI::updatePaneTerminalDisplay) Terminal display updated - Content lines: " +
-                  std::to_string(visibleLines.size()));
 }
 
 void ClientGUI::addLineToPaneTerminal(Pane& currentPane, const std::string& line) {
