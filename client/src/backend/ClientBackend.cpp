@@ -10,7 +10,7 @@
 namespace backend {
 
 ClientBackend::ClientBackend(const std::string& ip, unsigned short port) : logger("./client_backend.log") {
-   
+    
     this -> clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     
     if(-1 == this -> clientSocket) {
@@ -82,6 +82,28 @@ void ClientBackend::SetPath(std::string& new_path){
 std::string ClientBackend::GetPath() const {
     std::lock_guard<std::mutex> lock(this -> pathMutex);
     return this -> currentPath;
+}
+
+std::unique_ptr<ClientBackend> ClientBackend::clone() {
+    try {
+        // Create a new backend connection to the same server
+        auto clonedBackend = std::make_unique<ClientBackend>("127.0.0.1", 8080);
+        
+        // Copy the current path
+        std::string Path = this -> GetPath();
+        clonedBackend->SetPath(Path);
+        
+        // Log the cloning
+        logger.log("[DEBUG](ClientBackend::clone) Backend cloned successfully.");
+        
+        return clonedBackend;
+    }
+    catch (const std::exception& e) {
+        // Log any cloning errors
+        logger.log("[ERROR](ClientBackend::clone) Cloning failed: " +
+                   std::string(e.what()));
+        throw;
+    }
 }
 
 }

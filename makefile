@@ -27,8 +27,8 @@ LIBS = -lsfml-graphics -lsfml-window -lsfml-system
 
 # Compiler settings
 CXX = clang++
-CLIENT_CXXFLAGS = -std=c++17 -Wall -g -I$(CLIENT_HEADERS_DIR) -I$(shell brew --prefix sfml@2)/include
-SERVER_CXXFLAGS = -std=c++17 -Wall -g -I$(SERVER_HEADERS_DIR)
+CLIENT_CXXFLAGS = -std=c++20 -Wall -g -I$(CLIENT_HEADERS_DIR) -I$(shell brew --prefix sfml@2)/include
+SERVER_CXXFLAGS = -std=c++20 -Wall -g -I$(SERVER_HEADERS_DIR)
 # Add SFML library path for linking
 LDFLAGS = -L$(shell brew --prefix sfml@2)/lib
 

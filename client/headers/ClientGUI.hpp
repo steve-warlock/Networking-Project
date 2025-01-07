@@ -19,6 +19,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <sstream>
+#include <memory>
 #include <stdexcept>
 #include <filesystem>
 #include <thread>
@@ -44,27 +45,20 @@ enum class SplitType {
 };
 
 struct Pane {
+    SplitType splitType;
+    sf::FloatRect bounds;
     std::vector<std::string> terminalLines;
     std::string currentPath;
     std::string currentInput;
-    float scrollPosition = 0;
-    SplitType splitType = SplitType::NONE;
-    sf::FloatRect bounds;
-    sf::FloatRect dividerLine;
-    
-    // input and output text
+    float cursorPosition = 0.0f;
+    int scrollPosition = 0;
+    std::vector<std::string> commandHistory;
+    size_t currentHistoryIndex = -1;
+    std::unique_ptr<backend::ClientBackend> backend;
     sf::Text inputText;
     sf::Text outputText;
-    
-    // cursor
     sf::RectangleShape cursor;
-    float cursorPosition = 0.0f;
-    bool cursorVisible = true;
-    sf::Clock cursorBlinkClock;
-    
-    // commandHistory
-    std::vector<std::string> paneCommandHistory;
-    size_t paneCommandHistoryIndex = -1;
+    sf::RectangleShape scrollBar;
 };
 
 class ClientGUI {
@@ -76,6 +70,9 @@ public:
     // deactivate copy constructors and assign operator
     ClientGUI(const ClientGUI&) = delete;
     ClientGUI& operator = (const ClientGUI&) = delete;
+    
+    //destructor
+    ~ClientGUI();
     
 private:
     backend::ClientBackend &backend;
@@ -107,7 +104,7 @@ private:
     editorMode currentMode = editorMode::NORMAL;
     std::vector<std::string> editorLines;
     std::string currentEditingFile;
-    NanoCursor nanoCursor = {0, 0};
+    NanoCursor nanoCursor = {0, 0, 0};
     std::string savedMessage;
     
     void initializeWindow();
@@ -129,6 +126,9 @@ private:
     // Process input methods
     void processInput(sf::Event event);
     void handleSpecialInput(sf::Event event);
+    void renderDefaultTerminal();
+    void handleScrolling(sf::Event event);
+    void processNormalModeInput(sf::Event event);
     
     // editor mode methods
     void enterNanoEditorMode(const std::string& fileContent, const std::string& fileName);
@@ -150,6 +150,11 @@ private:
     void updatePaneScrollBar(Pane& pane);
     void updatePaneCursor(Pane& pane);
     void switchPane(int direction);
+    void initializePaneCursor(Pane& pane);
+    void handlePaneShortcuts(sf::Event event);
+    void updateCursorVisibility(bool visible);
+    void addLineToPaneTerminal(Pane& currentPane, const std::string& line);
+    void renderPanes();
     void processPaneInput(sf::Event event, Pane& currentPane);
     void navigatePaneCommandHistory(Pane& currentPane, bool goUp);
     void handlePaneSpecialInput(sf::Event event, Pane& currentPane);
