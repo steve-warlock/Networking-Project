@@ -84,26 +84,4 @@ std::string ClientBackend::GetPath() const {
     return this -> currentPath;
 }
 
-std::unique_ptr<ClientBackend> ClientBackend::clone() {
-    try {
-        // Create a new backend connection to the same server
-        auto clonedBackend = std::make_unique<ClientBackend>("127.0.0.1", 8080);
-        
-        // Copy the current path
-        std::string Path = this -> GetPath();
-        clonedBackend->SetPath(Path);
-        
-        // Log the cloning
-        logger.log("[DEBUG](ClientBackend::clone) Backend cloned successfully.");
-        
-        return clonedBackend;
-    }
-    catch (const std::exception& e) {
-        // Log any cloning errors
-        logger.log("[ERROR](ClientBackend::clone) Cloning failed: " +
-                   std::string(e.what()));
-        throw;
-    }
-}
-
 }

@@ -1,0 +1,194 @@
+\documentclass[runningheads]{llncs}
+\usepackage{graphicx}
+\usepackage{url}
+
+\begin{document}
+
+\title{RemMux}
+\author{Munteanu Ștefan}
+\institute{Facultatea de Informatică, Universitatea Alexandru Ioan Cuza, Iași
+\\
+\email{stefan.munteanu@info.uaic.ro}}
+\maketitle
+
+\begin{abstract}
+Proiectul constă în implementarea unui sistem client-server pentru executarea de comenzi la distanță, similar cu SecureShell (SSH), dar fără criptare. Clientul permite deschiderea mai multor ferestre simultane, asemănător Tmux, utilizând o interfață grafică minimalistă. Serverul este concurent și poate gestiona mai mulți clienți în același timp, iar logarea thread-safe este integrată pentru debug și monitorizare.
+\end{abstract}
+
+\section{Introducere}
+RemMux este o aplicație client-server care permite utilizatorilor să execute comenzi pe un server de la distanță, printr-o interfață cu mai multe ferestre afișate simultan. Aplicația este proiectată să funcționeze fără criptare, dar oferă un model simplificat de interacțiune cu serverul, similar cu SecureShell (SSH). Obiectivele principale ale proiectului sunt:
+Funcționalitățile principale ale aplicației includ:
+\begin{itemize}
+    \item Multiplexare de terminal
+    \item Interfață grafică minimalistă
+    \item Suport pentru mai multe ferestre
+    \item Gestionarea comenzilor și răspunsurilor
+    \item Logarea thread-safe
+\end{itemize}
+
+ClientGUI oferă următoarele funcționalități:
+\begin{itemize}
+    \item Inițializarea interfeței grafice și conectarea la backend
+    \item Gestionarea afișării și a evenimentelor utilizatorului
+    \item Trimiterea comenzilor către backend și actualizarea răspunsurilor
+    \item Suport pentru navigarea între ferestre și gestionarea comenzilor
+\end{itemize}
+
+\section{Tehnologii Aplicate}
+\begin{itemize}
+    \item \textbf{TCP (Transmission Control Protocol)}: Utilizat pentru comunicarea bidirecțională între client și server, oferind o conexiune fiabilă.
+    \item \textbf{SFML (Simple and Fast Multimedia Library)}: Biblioteca utilizată pentru crearea interfeței grafice, incluzând suport pentru afișarea multiplă a ferestrelor.
+    \item \textbf{Thread-uri C++}: Serverul folosește \texttt{std::thread} pentru a permite gestionarea concurentă a mai multor clienți.
+    \item \textbf{Logger Thread-safe}: Sistemul de logare este protejat împotriva accesului concurent utilizând \texttt{std::mutex}.
+\end{itemize}
+
+\section{Structura Aplicației}
+Aplicația este structurată conform arhitecturii client-server:
+\begin{itemize}
+    \item \textbf{Serverul}: Rulează într-un proces dedicat și gestionează conexiunile multiple folosind fire de execuție. Acesta interpretează comenzile și execută procese pe mașina locală.
+    \item \textbf{Clientul}: Oferă o interfață text pentru trimiterea comenzilor și recepția răspunsurilor. Interfața grafică permite utilizatorilor să deschidă mai multe ferestre simultan pentru sesiunile active.
+\end{itemize}
+
+Structura de directoare:
+\begin{verbatim}
+.
+|-- Makefile
+|-- build
+|   |-- runner_server.out
+|   |-- runner_client.out
+|-- server
+|   |-- runner_server.cpp
+|   |-- headers
+|   |   |-- Logger.hpp
+|   |   |-- Server.hpp
+|   |-- src
+|   |   |-- Logger.cpp
+|   |   |-- Server.cpp
+|-- logs
+|   |-- client_gui.log
+|   |-- client_backend.log
+|   |-- server.log
+|-- assets
+|   |-- arial.ttf
+|-- client
+|   |-- runner_client.cpp
+|   |-- headers
+|   |   |-- Logger.hpp
+|   |   |-- ClientBackend.hpp
+|   |   |-- Client.hpp
+|   |   |-- ClientGUI.hpp
+|   |-- src
+|   |   |-- backend
+|   |   |   |-- Client.cpp
+|   |   |   |-- ClientBackend.cpp
+|   |   |   |-- Logger.cpp
+|   |   |-- gui
+|   |       |-- ClientGUI.cpp
+\end{verbatim}
+
+\section{Aspecte de Implementare}
+\subsection{Protocolul la nivelul aplicației}
+Protocolul utilizează TCP pentru comunicare. Pașii protocolului sunt următorii:
+\begin{enumerate}
+    \item Clientul deschide o conexiune TCP cu serverul.
+    \item Clientul trimite o comandă în format text (e.g., \texttt{ls}, \texttt{pwd}, \texttt{exit}).
+    \item Serverul primește comanda, o procesează și trimite răspunsul.
+    \item Dacă clientul trimite \texttt{exit}, conexiunea este închisă.
+\end{enumerate}
+
+\subsection{Descrierea câtorva funcții din cod}
+\paragraph{Logger}
+Clasa \texttt{Logger} gestionează logarea thread-safe a mesajelor, atât pentru Client, cât și pentru Server:
+\begin{itemize}
+    \item \texttt{Logger(const std::string\& filePath)} deschide fișierul specificat în modul de adăugare append, astfel încât mesajele să fie adăugate la sfârșitul fișierului existent. Util pentru clienți multiplii.
+    \item \texttt{{\raise.17ex\hbox{$\scriptstyle\sim$}}Logger()}: Asigură închiderea fișierului atunci când obiectul \texttt{Logger} își încheie ciclul de viață. Dacă fișierul este deschis, metoda \texttt{close()} este apelată pentru a elibera resursele și pentru a preveni coruperea datelor.
+    \item \texttt{log(const std::string\& message)}: Scrie un mesaj în fișierul de log, protejând accesul cu un \texttt{std::mutex}.
+\end{itemize}
+
+\paragraph{Server}
+Clasa \texttt{Server} implementează logica serverului:
+\begin{itemize}
+    \item \texttt{Server(unsigned short port)}: Inițializează serverul și începe să asculte conexiuni pe portul specificat.
+    \item \texttt{run()}: Acceptă conexiuni noi și creează fire de execuție pentru fiecare client.
+    \item \texttt{{\raise.17ex\hbox{$\scriptstyle\sim$}}Server()}: Închide conexiunea serverului și a fișierului de log.
+    \item \texttt{handleClient(int clientSocket)}: Gestionează comenzile primite de la un client și trimite răspunsuri.
+    \item \texttt{processCommand(const std::string\& command, int clientSocket, std::string\& outputBuffer)}: Procesează o comandă și salvează răspunsul în outputBuffer.
+    \item \texttt{handleNanoCommand(const std::string\& command)}: Procesează comenzi pentru editorul de text nano.
+    \item \texttt{handleChangeDirectory(const std::string\& command, int clientSocket)}: Procesează comenzi pentru schimbarea directorului curent.
+    \item \texttt{Server::executeCommand(const std::string\& cmd)}: Execută o comandă pe sistemul de operare și returnează rezultatul.
+\end{itemize}
+
+\paragraph{ClientBackend}
+Clasa \texttt{ClientBackend} gestionează comunicarea cu serverul:
+\begin{itemize}
+    \item \texttt{ClientBackend(std::string\& ip, unsigned short port)}: Creează conexiunea TCP cu serverul.
+    \item \texttt{{\raise.17ex\hbox{$\scriptstyle\sim$}}ClientBackend()}: Închide conexiunea cu serverul.
+    \item \texttt{GetPath()}: Returnează directorul curent.
+    \item \texttt{SetPath(std::string\& new_path)}: Schimbă directorul curent.
+    \item \texttt{sendCommand(const std::string\& command)}: Trimite comenzi și primește răspunsuri de la server.
+\end{itemize}
+
+\paragraph{ClientGUI}
+Clasa \texttt{ClientGUI} implementează interfața grafică:
+\begin{itemize}
+    \item \texttt{ClientGUI(backend::ClientBackend\& backend)}: Inițializează interfața grafică și se conectează la backend.
+    \item \texttt{run()}: Gestionează afișarea și evenimentele utilizatorului.
+    \item \texttt{processInput(sf::Event event)}: Trimite comenzi backend-ului și actualizează răspunsul când este în normal mode.
+    \item \texttt{processNanoInput(sf::Event event)}: Trimite comenzi backend-ului și actualizează răspunsul când este în nano mode.
+    \item \texttt{processPaneInput(sf::Event event, Pane\& currentPane)}: Trimite comenzi backend-ului și actualizează răspunsul când este în pane mode.
+    \item \texttt{createNewPane(SplitType splitType);}: Creează panouri noi.
+    \item \texttt{switchPane(int direction)}: Schimbă panoul activ.
+    \item \texttt{closeCurrentPane()}: Închide panoul activ.
+    \item \texttt{updatePaneTerminalDisplay(Pane\& pane)}: Actualizează afișarea terminalului pentru un panou specific.
+    \item \texttt{handleScrolling(sf::Event event)}: Gestionează evenimentele de scroll.
+    \item \texttt{handlePaneScrolling(sf::Event event, Pane\& pane)}: Gestionează evenimentele de scroll pentru un panou specific.
+
+\end{itemize}
+
+\paragraph{Client}
+Clasa \texttt{Client} implementează :
+\begin{itemize}
+    \item \texttt{Client(std::string serverIP, unsigned short port)}: Inițializează componentele interne ale acesteia.
+    \item \texttt{run()}: gestionează ciclul principal al aplicației, inclusiv interacțiunea utilizatorului și actualizările vizuale.
+\end{itemize}
+
+\subsection{Scenarii de utilizare}
+\begin{itemize}
+    \item \textbf{Deschiderea unei sesiuni}: Un client se conectează la server și începe să trimită comenzi.
+    \item \textbf{Gestionarea comenzilor simultane}: Doi clienți trimit comenzi în același timp, iar serverul le procesează independent.
+    \item \textbf{Comenzi invalide}: Clientul trimite o comandă greșită, iar serverul răspunde cu un mesaj de eroare.
+\end{itemize}
+\subsection{Navigare vizuală}
+\begin{itemize}
+\item \textbf{Deschiderea unei noi ferestre}: Clientul deschide o nouă fereastră și începe să trimită comenzi.
+\item \textbf{Navigarea între ferestre}: Clientul navighează între ferestrele deschise și trimite comenzi pentru fiecare fereastră.
+\item \textbf{Închiderea unei ferestre}: Clientul închide o fereastră și își continuă activitatea în celelalte ferestre deschise.
+\end{itemize}
+
+\section{Diagramă}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Diagrama.png}
+    \caption{Diagramă RemMux}
+    \label{fig:arch}
+\end{figure}
+
+\section{Concluzii}
+Proiectul RemMux demonstrează utilizarea tehnologiilor de rețea și a programării concurente pentru a dezvolta o aplicație de tip SSH simplificat. Sistemul suportă multiple ferestre pentru utilizatori și gestionează concurența eficient. 
+
+Îmbunătățiri posibile includ:
+\begin{itemize}
+    \item Adăugarea unui sistem de autentificare.
+    \item Suport pentru comenzi complexe, cum ar fi transferul de fișiere.
+    \item Extinderea suportului pentru alte protocoale.
+\end{itemize}
+
+\section{Referințe Bibliografice}
+\begin{itemize}
+    \item Springer LNCS Guidelines: \url{https://www.springer.com/gp/computer-science/lncs/conference-proceedings-guidelines}
+    \item SFML Documentation: \url{https://www.sfml-dev.org/documentation/}
+    \item Sequence Diagram: \url{ https://sequencediagram.org}
+\end{itemize}
+
+\end{document}

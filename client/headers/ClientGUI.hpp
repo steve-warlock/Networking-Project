@@ -133,7 +133,7 @@ private:
     
     // editor mode methods
     void enterNanoEditorMode(const std::string& fileContent, const std::string& fileName);
-    std::vector<std::string>splitFileContent(const std::string& content);
+    std::vector<std::string> splitFileContent(const std::string& content);
     std::vector<std::string> wrapLines(const std::string& originalLine, float maxWid);
     void processNanoInput(sf::Event event);
     void saveNanoFile();

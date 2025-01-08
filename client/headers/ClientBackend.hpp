@@ -37,9 +37,6 @@ public:
     std::string GetPath() const;
     void SetPath(std::string& new_path);
     
-    // clone method
-    std::unique_ptr<ClientBackend> clone();
-    
     std::string sendCommand(const std::string& command);
 private:
     int clientSocket;
