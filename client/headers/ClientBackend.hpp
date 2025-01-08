@@ -44,7 +44,7 @@ public:
 private:
     int clientSocket;
     std::mutex backendMutex; // for protecting the socket access
-    mutable std::mutex pathMutex; 
+    mutable std::mutex pathMutex;
     logs::Logger logger;
     std::string currentPath;
 };

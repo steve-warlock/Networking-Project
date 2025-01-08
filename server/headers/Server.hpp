@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <cstring>
 #include <stdexcept>
+#include <map>
 
 using namespace std::filesystem;
 
@@ -41,12 +42,14 @@ private:
     unsigned short port;
     std::mutex clientMutex; // Mutex for syncing the access to the resources
     logs::Logger logger;
+    std::map<int, path> clientPaths;
+    std::mutex pathsMutex;
     
     void handleClient(int clientSocket);
     
     // cd functions to handle edge cases and ensure proper functionality
     bool validateDirectory(const path& targetPath);
-    path resolvePath(const std::string& rawPath);
+    path resolvePath(const std::string& rawPath, const path& currentPath);
     void handleChangeDirectory(const std::string& command, int clientSocket);
     
     //  clean client command

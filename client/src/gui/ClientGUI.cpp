@@ -834,11 +834,13 @@ void ClientGUI::createNewPane(SplitType splitType) {
             Pane initialPane;
             initialPane.splitType = splitType;
             
-            // Backend cloning
-            initialPane.backend = backend.clone();
+            // new Backend
+            initialPane.backend = std::make_unique<backend::ClientBackend>("127.0.0.1", 8080);
             
             // Initialize current path
-            std::string path = backend.GetPath();
+            std::string path = current_path().string();
+            initialPane.backend -> SetPath(path);
+            path = initialPane.backend -> GetPath();
             initialPane.backend -> SetPath(path);
             initialPane.currentInput = initialPane.backend -> GetPath() + "> ";
             initialPane.inputText.setString(initialPane.currentInput);
@@ -856,11 +858,7 @@ void ClientGUI::createNewPane(SplitType splitType) {
             initialPane.cursor.setSize(sf::Vector2f(2, 16));
             initialPane.cursor.setFillColor(sf::Color::White);
             
-            
             panes.push_back(std::move(initialPane));
-            
-            initializePaneCursor(panes.back());
-            updatePaneTerminalDisplay(panes.back());
         }
         
         // Subsequent pane creation
@@ -914,8 +912,6 @@ void ClientGUI::createNewPane(SplitType splitType) {
         guiLogger.log("[DEBUG](ClientGUI::createNewPane) Total panes now: " + std::to_string(panes.size()));
         guiLogger.log("[DEBUG](ClientGUI::createNewPane) Current pane index: " + std::to_string(currentPaneIndex));
         
-        // Force render
-        renderPanes();
     }
     catch (const std::exception& e) {
         guiLogger.log("[ERROR](ClientGUI::createNewPane) Pane creation failed: " + std::string(e.what()));
@@ -1490,34 +1486,20 @@ void ClientGUI::renderPanes() {
 
 void ClientGUI::switchPane(int direction) {
     if (panes.empty()) return;
-    
-    Pane& currentPane = panes[currentPaneIndex];
-    
-    currentPane.terminalLines = this->terminalLines;
-    std::string path = this -> backend.GetPath();
-    currentPane.backend -> SetPath(path);
-    currentPane.currentInput = this->inputText.getString();
-    currentPane.scrollPosition = this->scrollPosition;
-    
+
+    size_t oldIndex = currentPaneIndex;
     currentPaneIndex = (currentPaneIndex + direction + panes.size()) % panes.size();
-    
+
+    // Only update visual state, preserve backend independence
     Pane& newPane = panes[currentPaneIndex];
-    this->terminalLines = newPane.terminalLines;
-    path = newPane.backend -> GetPath();
-    this->backend.SetPath(path);
-    this->inputText.setString(newPane.currentInput);
-    this->scrollPosition = newPane.scrollPosition;
-    
-    // Update display based on restored state
-    initializePaneCursor(newPane);
-    updatePaneScrollBar(newPane);
-    updatePaneTerminalDisplay(newPane);
-    
-    // Log the pane switch
-    guiLogger.log("[DEBUG](ClientGUI::switchPane) Switched to pane " +
-                  std::to_string(currentPaneIndex) +
-                  ". Current path: " + newPane.backend -> GetPath());
-    
+
+    // Update cursor position for the new active pane
+    newPane.cursorPosition = newPane.currentInput.length() -
+                            (newPane.backend->GetPath() + "> ").length();
+
+    guiLogger.log("[DEBUG](ClientGUI::switchPane) Switched from pane " +
+                  std::to_string(oldIndex) + " to " +
+                  std::to_string(currentPaneIndex));
 }
 
 void ClientGUI::closeCurrentPane() {
@@ -1628,6 +1610,10 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
             
             // Handle Enter key (execute command)
             if (inputChar == '\r' || inputChar == '\n') {
+                // thread lock
+                std::mutex commandMutex;
+                std::lock_guard<std::mutex> lock(commandMutex);
+
                 // Extract command from input
                 std::string command;
                 
@@ -1646,14 +1632,15 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                 
                 if (!command.empty()) {
                     try {
+
+                         // Send command to backend
+                        std::string response = currentPane.backend->sendCommand(command);
+
                         // Add command to terminal lines
                         addLineToPaneTerminal(currentPane, currentInput);
                         
-                        // Send command to backend
-                        std::string response = currentPane.backend->sendCommand(command);
-                        
                         if (command.substr(0, 2) == "cd") {
-                            std::string response = currentPane.backend->sendCommand(command);
+                            guiLogger.log("[DEBUG](ClientGUI::processPaneInput) Processing cd in pane " + std::to_string(currentPaneIndex) + ", old path: " + currentPane.backend->GetPath());
                             if (response.find("Invalid directory") == std::string::npos &&
                                 response.find("Error") == std::string::npos) {
                                 std::string newPath = response.substr(response.find_last_of('\n') + 1);
@@ -1712,8 +1699,8 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                         // Reset input
                         std::string newPrompt = currentPane.backend->GetPath() + "> ";
                         currentPane.currentInput = newPrompt;
-                        currentPane.cursorPosition = newPrompt.length();
                         currentPane.inputText.setString(currentPane.currentInput);
+                        currentPane.cursorPosition = newPrompt.length();
                         updatePaneCursor(currentPane);
                     } catch(const std::exception& e) {
                         addLineToPaneTerminal(currentPane, "Error: " + std::string(e.what()));
@@ -2086,7 +2073,7 @@ void ClientGUI::addLineToTerminal(const std::string &line) {
         updateTerminalDisplay();
         updateScrollBar();
         
-        this -> guiLogger.log("[DEBUG] Terminal line added. Total lines: " +
+        this -> guiLogger.log("([DEBUG](ClientGUI::addLineToTerminal) Terminal line added. Total lines: " +
                               std::to_string(terminalLines.size()));
     }
 }
@@ -2343,12 +2330,7 @@ void ClientGUI::run() {
                   std::string("Panes: ") + std::to_string(panes.size()) +
                   ", Current mode: " +
                   (currentMode == editorMode::NORMAL ? "Normal" : "Editing"));
-    
-    if(!panes.empty())
-    {
-        renderPanes();
-    }
-    
+        
     // Main application loop
     while (window.isOpen()) {
         

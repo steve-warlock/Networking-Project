@@ -76,7 +76,7 @@ public:
     ~ClientGUI();
     
 private:
-    backend::ClientBackend &backend;
+    backend::ClientBackend& backend;
     sf::RenderWindow window;
     logs::Logger guiLogger;
     

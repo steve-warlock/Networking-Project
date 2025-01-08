@@ -37,7 +37,7 @@ bool Server::validateDirectory(const path &targetPath){
     }
 }
 
-path Server::resolvePath(const std::string &rawPath){
+path Server::resolvePath(const std::string &rawPath, const path &currentPath){
     path resolvedPath;
     
     // home directory (cd or cd ~)
@@ -54,16 +54,16 @@ path Server::resolvePath(const std::string &rawPath){
     }
     // relative path
     else if(rawPath == ".") {
-        resolvedPath = current_path();
+        resolvedPath = currentPath;
     }
     else if(rawPath == "..") {
-        resolvedPath = current_path().parent_path();
+        resolvedPath = currentPath.parent_path();
     }
     // other cases
     else {
         resolvedPath = rawPath[0] == '/' ?
                 path(rawPath) : // absolute
-                current_path() / rawPath; // relative
+                currentPath / rawPath; // relative
     }
     
     resolvedPath = canonical(resolvedPath);
@@ -75,11 +75,17 @@ void Server::handleChangeDirectory(const std::string &command, int clientSocket)
     std::string rawPath = command.substr(2); // after "cd"
     
     try {
+
+         std::lock_guard<std::mutex> lock(pathsMutex);
+        
+        // Get client's current path
+        auto& currentPath = clientPaths[clientSocket];
+
         // trim the path of whitespaces
         rawPath.erase(0, rawPath.find_first_not_of(" \t"));
         rawPath.erase(rawPath.find_last_not_of(" \t") + 1);
         
-        path targetPath = resolvePath(rawPath.empty() ? "~" : rawPath);
+        path targetPath = resolvePath(rawPath.empty() ? "~" : rawPath, currentPath);
         
         // validation phase
         if(!validateDirectory(targetPath)) {
@@ -90,7 +96,7 @@ void Server::handleChangeDirectory(const std::string &command, int clientSocket)
         }
         
         // change the current directory
-        current_path(targetPath);
+        currentPath = targetPath;
         
         std::string msg = "\n" + targetPath.string();
         send(clientSocket, msg.c_str(), msg.length(), 0);
@@ -187,6 +193,13 @@ std::string Server::handleNanoCommand(const std::string& command) {
 
 void Server::processCommand(const std::string &command, int clientSocket, std::string &outputBuffer){
     try {
+
+         // Get client's current path
+        auto& clientPath = clientPaths[clientSocket];
+        
+        // Change to client's directory before executing
+        current_path(clientPath);
+
         // special command
         if(command.substr(0,2) == "cd") {
             handleChangeDirectory(command, clientSocket);
@@ -268,6 +281,13 @@ std::string Server::cleanedCommand(std::string& command){
 }
 
 void Server::handleClient(int clientSocket) {
+    
+    // initialize client path
+    {
+        std::lock_guard<std::mutex> lock(this -> pathsMutex);
+        this -> clientPaths[clientSocket] = current_path();
+    }
+
     char buffer[1024] = {'\0'};
     ssize_t bytesRead;
 
