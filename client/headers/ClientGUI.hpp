@@ -139,6 +139,7 @@ private:
     void saveNanoFile();
     void exitNanoEditorMode();
     void refreshNanoDisplay();
+    std::mutex ModeMutex; // for opening nano when I'm in pane mode
     
     // pane management variables
     std::vector<Pane> panes;

@@ -766,6 +766,9 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent, const std::s
     // reset the cursor to 0
     this -> nanoCursor = {0, 0, 0};
     
+    //thread safe access
+    std::lock_guard<std::mutex> lock(this -> ModeMutex);
+    
     // Set current mode
     this->currentMode = editorMode::EDITTING;
     
@@ -798,6 +801,9 @@ void ClientGUI::enterNanoEditorMode(const std::string& fileContent, const std::s
 
 void ClientGUI::exitNanoEditorMode() {
     guiLogger.log("[INFO](ClientGUI::exitNanoEditor) Exiting Nano Editor Mode.");
+    
+    //thread safe access
+    std::lock_guard<std::mutex> lock(this -> ModeMutex);
     
     // Reset to normal mode
     this->currentMode = editorMode::NORMAL;
@@ -1381,13 +1387,18 @@ void ClientGUI::updatePaneCursor(Pane& pane) {
 
 void ClientGUI::renderPanes() {
     // Comprehensive logging and debugging
-    guiLogger.log("[DEBUG](ClientGUI::renderPanes) Starting pane rendering");
+    guiLogger.log("[DEBUG](ClientGUI::renderPanes) Starting pane rendering.");
     
     // Ensure we have panes to render
     if (panes.empty()) {
-        guiLogger.log("[WARN](ClientGUI::renderPanes) No panes to render");
+        guiLogger.log("[WARN](ClientGUI::renderPanes) No panes to render.");
         return;
     }
+    
+    if (currentMode == editorMode::EDITTING){
+        guiLogger.log("[WARN](ClientGUI::renderPanes) No panes to render because of editing of a file using nano.");
+           return; // Don't render panes in nano mode
+       }
     
     // Clear the window with a distinct background color
     window.clear(sf::Color(30, 30, 30)); // Dark gray background for visibility
@@ -1486,17 +1497,17 @@ void ClientGUI::renderPanes() {
 
 void ClientGUI::switchPane(int direction) {
     if (panes.empty()) return;
-
+    
     size_t oldIndex = currentPaneIndex;
     currentPaneIndex = (currentPaneIndex + direction + panes.size()) % panes.size();
-
+    
     // Only update visual state, preserve backend independence
     Pane& newPane = panes[currentPaneIndex];
-
+    
     // Update cursor position for the new active pane
     newPane.cursorPosition = newPane.currentInput.length() -
-                            (newPane.backend->GetPath() + "> ").length();
-
+    (newPane.backend->GetPath() + "> ").length();
+    
     guiLogger.log("[DEBUG](ClientGUI::switchPane) Switched from pane " +
                   std::to_string(oldIndex) + " to " +
                   std::to_string(currentPaneIndex));
@@ -1519,14 +1530,6 @@ void ClientGUI::closeCurrentPane() {
         updatePaneBounds();
         
         currentPaneIndex = std::min(currentPaneIndex, panes.size() - 1);
-        
-//        Pane& remainingPane = panes[currentPaneIndex];
-//        this->terminalLines = remainingPane.terminalLines;
-//        std::string path = remainingPane.backend -> GetPath();
-//        this->backend.SetPath(path);
-//        this->inputText.setString(remainingPane.currentInput);
-//        this->scrollPosition = remainingPane.scrollPosition;
-        
     }
 }
 
@@ -1613,7 +1616,7 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                 // thread lock
                 std::mutex commandMutex;
                 std::lock_guard<std::mutex> lock(commandMutex);
-
+                
                 // Extract command from input
                 std::string command;
                 
@@ -1632,10 +1635,10 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                 
                 if (!command.empty()) {
                     try {
-
-                         // Send command to backend
+                        
+                        // Send command to backend
                         std::string response = currentPane.backend->sendCommand(command);
-
+                        
                         // Add command to terminal lines
                         addLineToPaneTerminal(currentPane, currentInput);
                         
@@ -2330,7 +2333,8 @@ void ClientGUI::run() {
                   std::string("Panes: ") + std::to_string(panes.size()) +
                   ", Current mode: " +
                   (currentMode == editorMode::NORMAL ? "Normal" : "Editing"));
-        
+    editorMode lastMode = this -> currentMode;
+    
     // Main application loop
     while (window.isOpen()) {
         
@@ -2372,12 +2376,15 @@ void ClientGUI::run() {
                                   std::string(e.what()));
                 }
             }
-            else if (currentMode == editorMode::EDITTING) {
-                try {
+            else {
+                if (currentMode == editorMode::EDITTING) {
                     processNanoInput(event);
-                } catch (const std::exception& e) {
-                    guiLogger.log("[ERROR](ClientGUI::run) Nano editor input error: " +
-                                  std::string(e.what()));
+                } else {
+                    if (!panes.empty()) {
+                        processPaneInput(event, panes[currentPaneIndex]);
+                    } else {
+                        processInput(event);
+                    }
                 }
             }
             
@@ -2413,7 +2420,10 @@ void ClientGUI::run() {
         }
         
         // Rendering
-        if (frameClock.getElapsedTime() >= frameTime) {
+        if (frameClock.getElapsedTime() >= frameTime || lastMode != currentMode) {
+            // render only one
+            std::lock_guard<std::mutex> lock(this -> ModeMutex);
+            
             // Clear the window
             window.clear(sf::Color::Black);
             
@@ -2452,7 +2462,7 @@ void ClientGUI::run() {
         }
     }
     
-    // Log end of run method
+    
     guiLogger.log("[INFO](ClientGUI::run) GUI run loop terminated.");
 }
 
