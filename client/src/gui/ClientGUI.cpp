@@ -806,11 +806,11 @@ void ClientGUI::exitNanoEditorMode() {
     this -> cursor.setSize(sf::Vector2f(2, this -> inputText.getCharacterSize()));
     
     // Reset editor state
-    this->editorLines.clear();
-    this->currentEditingFile = "";
+    this -> editorLines.clear();
+    this -> currentEditingFile = "";
     
     // Restore terminal state
-    std::string currentPath = this->backend.GetPath() + "> ";
+    std::string currentPath = this -> backend.GetPath() + "> ";
     this->inputText.setString(currentPath);
     
     guiLogger.log("[DEBUG](ClientGUI::exitNanoEditor) Nano editor state reset.");
@@ -883,17 +883,17 @@ void ClientGUI::createNewPane(SplitType splitType) {
         newPane.inputText.setFillColor(sf::Color::White);
         newPane.outputText.setFillColor(sf::Color::White);
         newPane.inputText.setPosition(
-            newPane.bounds.left + 10,  // Relative to pane's left bound
-            newPane.bounds.top + 50    // With a consistent vertical offset
-        );
+                                      newPane.bounds.left + 10,  // Relative to pane's left bound
+                                      newPane.bounds.top + 50    // With a consistent vertical offset
+                                      );
         newPane.outputText.setString("");
         // Initialize cursor
         newPane.cursor.setSize(sf::Vector2f(2, 16));
         newPane.cursor.setFillColor(sf::Color::White);
         newPane.cursor.setPosition(
-          newPane.inputText.getPosition().x,  // Aligned with input text
-          newPane.inputText.getPosition().y + 2  // Slight vertical offset
-        );
+                                   newPane.inputText.getPosition().x,  // Aligned with input text
+                                   newPane.inputText.getPosition().y + 2  // Slight vertical offset
+                                   );
         
         panes.push_back(std::move(newPane));
         
@@ -942,7 +942,7 @@ void ClientGUI::initializePaneCursor(Pane& pane) {
     pane.cursor.setPosition(
                             pane.bounds.left + 10 + pathOffset, // 10 for padding
                             pane.inputText.getPosition().y + pane.bounds.top + 2
-    );
+                            );
     
     // initiate the cursor position
     pane.cursorPosition = 0.0f;
@@ -1109,7 +1109,8 @@ void ClientGUI::updatePaneBounds() {
 
 void ClientGUI::updatePaneTerminalDisplay(Pane& pane) {
     try {
-        // Constants
+        updatePaneBounds();
+        
         const float TITLE_HEIGHT = 30.0f;
         const float CHAR_HEIGHT = 16.0f;
         const float LINE_SPACING = 4.0f;
@@ -1117,21 +1118,28 @@ void ClientGUI::updatePaneTerminalDisplay(Pane& pane) {
         const float PADDING = 10.0f;
         const sf::Font* font = pane.inputText.getFont();
         
-        size_t maxVisibleLines = std::min(static_cast<size_t>(pane.bounds.height / CHAR_HEIGHT), pane.terminalLines.size());
-        size_t startIndex = (pane.terminalLines.size() > maxVisibleLines) ? (pane.terminalLines.size() - maxVisibleLines + pane.scrollPosition) : 0;
+        // Calculate visible area
+        float availableHeight = pane.bounds.height - TITLE_HEIGHT - (PADDING * 3) - LINE_HEIGHT;
+        size_t maxVisibleLines = static_cast<size_t>(availableHeight / LINE_HEIGHT);
         
-        // Prepare visible content
+        // Calculate display range (show newest lines first)
+        size_t startIndex;
+        if (pane.terminalLines.size() > maxVisibleLines) {
+            startIndex = pane.terminalLines.size() - maxVisibleLines - pane.scrollPosition;
+        } else {
+            startIndex = 0;
+        }
+        
+        // Build display text from newest lines
         std::string displayText;
-        for (size_t i = startIndex; i < pane.terminalLines.size(); ++i) {
-            displayText += (pane.terminalLines[i] + "\n");
+        for (size_t i = startIndex;
+             i < pane.terminalLines.size() && i < startIndex + maxVisibleLines;
+             ++i) {
+            displayText += pane.terminalLines[i] + "\n";
         }
+        if (!displayText.empty()) displayText.pop_back();
         
-        // Remove trailing new line
-        if (!displayText.empty()) {
-            displayText.pop_back();
-        }
-        
-        // Configure title
+        // Draw title
         sf::Text titleText;
         titleText.setFont(*font);
         titleText.setCharacterSize(20);
@@ -1139,35 +1147,40 @@ void ClientGUI::updatePaneTerminalDisplay(Pane& pane) {
         titleText.setString("Pane " + std::to_string(currentPaneIndex + 1));
         titleText.setPosition(pane.bounds.left + PADDING, pane.bounds.top + PADDING);
         
-        // Update output text
+        // Position output text
         pane.outputText.setFont(*font);
         pane.outputText.setCharacterSize(CHAR_HEIGHT);
         pane.outputText.setFillColor(sf::Color::White);
         pane.outputText.setString(displayText);
-        pane.outputText.setPosition(pane.bounds.left + PADDING, pane.bounds.top + TITLE_HEIGHT + PADDING);
+        pane.outputText.setPosition(pane.bounds.left + PADDING,
+                                    pane.bounds.top + TITLE_HEIGHT + PADDING);
         
-        // Calculate input Y position
-        float outputHeight = pane.outputText.getLocalBounds().height;
-        float newInputYPosition = pane.bounds.top + TITLE_HEIGHT + outputHeight + PADDING + 5;
+        // Calculate input position below output
+        float contentHeight = displayText.empty() ? 0 : pane.outputText.getLocalBounds().height;
+        float inputY = pane.bounds.top + TITLE_HEIGHT + PADDING + contentHeight + LINE_SPACING;
+        float maxInputY = pane.bounds.top + pane.bounds.height - LINE_HEIGHT - PADDING;
+        inputY = std::min(inputY, maxInputY);
         
-        // Update input text position
+        // Position input text
         pane.inputText.setFont(*font);
         pane.inputText.setCharacterSize(CHAR_HEIGHT);
         pane.inputText.setFillColor(sf::Color::White);
-        pane.inputText.setPosition(pane.bounds.left + PADDING, newInputYPosition);
+        pane.inputText.setPosition(pane.bounds.left + PADDING, inputY);
         
+        // Draw elements
+        //        window.draw(titleText);
+        //        window.draw(pane.outputText);
+        //        window.draw(pane.inputText);
         
         // Update cursor and scrollbar
         updatePaneCursor(pane);
         updatePaneScrollBar(pane);
         
-        guiLogger.log("[DEBUG](ClientGUI::updatePaneTerminalDisplay) Input Y Position: " +
-                      std::to_string(newInputYPosition) +
-                      ". Total lines: " + std::to_string(pane.terminalLines.size()));
+        guiLogger.log("[DEBUG] Display updated - Start: " + std::to_string(startIndex) +
+                      ", Visible: " + std::to_string(maxVisibleLines) +
+                      ", Total: " + std::to_string(pane.terminalLines.size()));
     } catch(const std::exception& e) {
-        guiLogger.log("[ERROR](ClientGUI::updatePaneTerminalDisplay) Exception: " + std::string(e.what()));
-    } catch (...) {
-        guiLogger.log("[ERROR](ClientGUI::updatePaneTerminalDisplay) Unknown exception occurred");
+        guiLogger.log("[ERROR] " + std::string(e.what()));
     }
 }
 
@@ -1221,13 +1234,14 @@ void ClientGUI::addLineToPaneTerminal(Pane& currentPane, const std::string& line
     if (currentPane.terminalLines.size() > MAX_HISTORY) {
         size_t excess = currentPane.terminalLines.size() - MAX_HISTORY;
         currentPane.terminalLines.erase(
-            currentPane.terminalLines.begin(),
-            currentPane.terminalLines.begin() + excess
-        );
+                                        currentPane.terminalLines.begin(),
+                                        currentPane.terminalLines.begin() + excess
+                                        );
     }
     
     currentPane.scrollPosition = 0;
     updatePaneCursor(currentPane);
+    updatePaneScrollBar(currentPane);
     updatePaneTerminalDisplay(currentPane);
     
     guiLogger.log("[DEBUG](ClientGUI::addLineToPaneTerminal) Added line: '" + trimmedLine +
@@ -1235,67 +1249,76 @@ void ClientGUI::addLineToPaneTerminal(Pane& currentPane, const std::string& line
 }
 
 void ClientGUI::updatePaneScrollBar(Pane& pane) {
-    // Calculate maximum visible lines
-    float availableHeight = pane.bounds.height;
-    float characterHeight = pane.inputText.getCharacterSize();
-    size_t maxVisibleLines = static_cast<size_t>(availableHeight / characterHeight);
+    const float SCROLLBAR_WIDTH = 8.0f;
+    const float PADDING = 2.0f;
+    const float TITLE_HEIGHT = 30.0f;
+    const float INPUT_HEIGHT = 20.0f;
     
-    // Check if scrollbar is required
-    if (pane.terminalLines.size() > maxVisibleLines) {
-        // Calculate scrollbar height
-        float scrollBarHeight = (static_cast<float>(maxVisibleLines) / pane.terminalLines.size()) * pane.bounds.height;
+    // Calculate dimensions
+    float bottomEdge = pane.bounds.top + pane.bounds.height;
+    float visibleHeight = pane.bounds.height - TITLE_HEIGHT - INPUT_HEIGHT - (PADDING);
+    float contentHeight = pane.terminalLines.size() * INPUT_HEIGHT;
+    
+    if (contentHeight > visibleHeight) {
+        // Position track from bottom
+        sf::RectangleShape scrollTrack;
+        scrollTrack.setSize(sf::Vector2f(SCROLLBAR_WIDTH, visibleHeight));
+        scrollTrack.setPosition(
+                                pane.bounds.left + pane.bounds.width - SCROLLBAR_WIDTH - PADDING,
+                                bottomEdge - INPUT_HEIGHT - PADDING - visibleHeight
+                                );
+        scrollTrack.setFillColor(sf::Color(50, 50, 50));
         
-        // Compute scrollbar position
-        float scrollBarPosition = pane.bounds.top +
-        ((pane.terminalLines.size() - maxVisibleLines - pane.scrollPosition) /
-         static_cast<float>(pane.terminalLines.size())) * pane.bounds.height;
+        // Calculate thumb position from bottom
+        float ratio = visibleHeight / contentHeight;
+        float thumbHeight = std::max(30.0f, visibleHeight * ratio);
+        float maxScroll = std::max(0.0f, static_cast<float>(pane.terminalLines.size() - (visibleHeight / 16.0f)));
+        float scrollPercent = maxScroll > 0 ? pane.scrollPosition / maxScroll : 0;
+        float thumbY = scrollTrack.getPosition().y + ((visibleHeight - thumbHeight) * (1.0f - scrollPercent));
         
-        // Set scrollbar properties
-        scrollBar.setSize(sf::Vector2f(10, scrollBarHeight));
-        scrollBar.setPosition(
-                              pane.bounds.left + pane.bounds.width - 15,
-                              scrollBarPosition
-                              );
-        scrollBar.setFillColor(sf::Color(100, 100, 100, 200));
-    } else {
-        // Hide scrollbar if not needed
-        scrollBar.setSize(sf::Vector2f(0, 0));
+        // Position thumb
+        sf::RectangleShape scrollThumb;
+        scrollThumb.setSize(sf::Vector2f(SCROLLBAR_WIDTH, thumbHeight));
+        scrollThumb.setPosition(scrollTrack.getPosition().x, thumbY);
+        scrollThumb.setFillColor(sf::Color(150, 150, 150));
+        
+        window.draw(scrollTrack);
+        window.draw(scrollThumb);
+        
+        guiLogger.log("[DEBUG](ClientGUI::updatePaneScrollBar) Bottom scrollbar - Y: " +
+                      std::to_string(scrollTrack.getPosition().y) +
+                      ", Height: " + std::to_string(visibleHeight));
     }
-    
-    // Logging for debugging
-    guiLogger.log("[DEBUG](ClientGUI::updatePaneScrollBar) Pane scroll bar updated. " +
-                  std::string("Total lines: ") + std::to_string(pane.terminalLines.size()) +
-                  ", Visible lines: " + std::to_string(maxVisibleLines));
 }
 
 void ClientGUI::updatePaneCursor(Pane& pane) {
     // Determine the pane index
     size_t paneIndex = std::find_if(panes.begin(), panes.end(),
-        [&pane](const Pane& p) { return &p == &pane; }) - panes.begin();
-
+                                    [&pane](const Pane& p) { return &p == &pane; }) - panes.begin();
+    
     // Log the start of cursor update for this specific pane
     guiLogger.log("[DEBUG](ClientGUI::updatePaneCursor) Updating cursor for Pane " +
                   std::to_string(paneIndex) +
                   ", Current Pane Index: " + std::to_string(currentPaneIndex));
-
+    
     // Get current path with shell prompt
     std::string currentPath = pane.backend->GetPath() + "> ";
     const sf::Font* font = pane.inputText.getFont();
-
+    
     // Get entire input string
     std::string fullInput = pane.inputText.getString();
     std::string currentInput = fullInput.substr(currentPath.length());
-
+    
     // Ensure cursor position does not exceed input length
     float maxCursorPosition = static_cast<float>(currentInput.length());
     pane.cursorPosition = std::min(std::max(0.0f, pane.cursorPosition), maxCursorPosition);
-
+    
     // Temporary text to calculate cursor position
     sf::Text tempText;
     tempText.setFont(*font);
     tempText.setCharacterSize(pane.inputText.getCharacterSize());
     tempText.setString(currentPath + currentInput);
-
+    
     float maxWidth = pane.bounds.width - 20; // 20px padding
     float textWidth = tempText.getGlobalBounds().width;
     static float scrollOffset = 0.0f;
@@ -1307,7 +1330,7 @@ void ClientGUI::updatePaneCursor(Pane& pane) {
     } else {
         scrollOffset = 0.0f;
     }
-
+    
     // Calculate cursor offset
     float cursorOffset = tempText.findCharacterPos(currentPath.length() + static_cast<int>(pane.cursorPosition)).x;
     
@@ -1317,34 +1340,32 @@ void ClientGUI::updatePaneCursor(Pane& pane) {
     pane.inputText.setPosition(pane.bounds.left + 10 - scrollOffset, verticalPosition);
     
     // Update cursor position with bounds checking
-    float finalCursorX = std::min(std::max(pane.bounds.left + 10 + cursorOffset, pane.bounds.left + 10),
-                                 pane.bounds.left + pane.bounds.width - 10);
-                                 
+    float finalCursorX = std::min(std::max(pane.bounds.left + 10 + cursorOffset, pane.bounds.left + 10), pane.bounds.left + pane.bounds.width);
     // Detailed logging of cursor calculation
     guiLogger.log("[DEBUG](ClientGUI::updatePaneCursor) Pane " + std::to_string(paneIndex) +
                   " Cursor Details: CurrentPath: '" + currentPath + "' CurrentInput: '" + currentInput + "' CursorOffset: " + std::to_string(cursorOffset) +
                   " PaneBounds Left: " + std::to_string(pane.bounds.left) +
                   " InputText Y: " + std::to_string(pane.inputText.getPosition().y));
-
+    
     // Update cursor position relative to pane bounds
     pane.cursor.setPosition(
                             finalCursorX,  // Add 10 for padding
                             verticalPosition + 2
                             );
-
+    
     // Cursor visibility logic
     if (paneIndex == currentPaneIndex) {
         // Blinking cursor for active pane
         static sf::Clock blinkClock;
         static bool cursorVisible = true;
-
+        
         if (blinkClock.getElapsedTime().asSeconds() >= 0.5f) {
             cursorVisible = !cursorVisible;
             blinkClock.restart();
         }
-
+        
         pane.cursor.setFillColor(cursorVisible ? sf::Color::White : sf::Color::Transparent);
-
+        
         // Log cursor visibility state
         guiLogger.log("[DEBUG](ClientGUI::updatePaneCursor) Pane " + std::to_string(paneIndex) +
                       " Cursor Visibility: " + (cursorVisible ? "Visible" : "Hidden"));
@@ -1355,7 +1376,7 @@ void ClientGUI::updatePaneCursor(Pane& pane) {
         guiLogger.log("[DEBUG](ClientGUI::updatePaneCursor) Pane " + std::to_string(paneIndex) +
                       " Cursor: Hidden (Inactive Pane)");
     }
-
+    
     // Log final cursor position
     guiLogger.log("[DEBUG](ClientGUI::updatePaneCursor) Pane " + std::to_string(paneIndex) +
                   " Final Cursor Position: X=" + std::to_string(pane.cursor.getPosition().x) +
@@ -1435,13 +1456,13 @@ void ClientGUI::renderPanes() {
             window.draw(pane.inputText);
             window.draw(pane.outputText);
             
-            // Cursor handling
+            // Cursor and scrollbar handling
             updatePaneCursor(pane);
-        
+            
             if (isActivePane) {
                 static sf::Clock blinkClock;
                 static bool cursorVisible = true;
-
+                
                 if (blinkClock.getElapsedTime().asSeconds() >= 0.5f) {
                     cursorVisible = !cursorVisible;
                     blinkClock.restart();
@@ -1503,7 +1524,7 @@ void ClientGUI::closeCurrentPane() {
     if (panes.size() <= 1) {
         
         this->terminalLines.clear();
-        std::string terminal_path = backend.GetPath();
+        std::string terminal_path = current_path().string();
         this->backend.SetPath(terminal_path);
         this->inputText.setString(backend.GetPath() + "> ");
         this->scrollPosition = 0;
@@ -1517,23 +1538,94 @@ void ClientGUI::closeCurrentPane() {
         
         currentPaneIndex = std::min(currentPaneIndex, panes.size() - 1);
         
-        Pane& remainingPane = panes[currentPaneIndex];
-        this->terminalLines = remainingPane.terminalLines;
-        std::string path = remainingPane.backend -> GetPath();
-        this->backend.SetPath(path);
-        this->inputText.setString(remainingPane.currentInput);
-        this->scrollPosition = remainingPane.scrollPosition;
+//        Pane& remainingPane = panes[currentPaneIndex];
+//        this->terminalLines = remainingPane.terminalLines;
+//        std::string path = remainingPane.backend -> GetPath();
+//        this->backend.SetPath(path);
+//        this->inputText.setString(remainingPane.currentInput);
+//        this->scrollPosition = remainingPane.scrollPosition;
         
     }
 }
 
+void ClientGUI::scrollPaneUp(Pane& pane, int lines) {
+    size_t maxVisibleLines = std::min(
+                                      MAX_VISIBLE_LINES,
+                                      static_cast<size_t>(pane.bounds.height / pane.inputText.getCharacterSize())
+                                      );
+    
+    if (pane.terminalLines.size() > maxVisibleLines) {
+        // Scroll up to see older lines
+        pane.scrollPosition = std::min(
+                                       pane.scrollPosition + lines,
+                                       std::max(0, static_cast<int>(pane.terminalLines.size()) - static_cast<int>(maxVisibleLines))
+                                       );
+        
+        updatePaneTerminalDisplay(pane);
+        updatePaneScrollBar(pane);
+        
+        guiLogger.log("[DEBUG](ClientGUI::scrollPaneUp) Scrolled up " +
+                      std::to_string(lines) + " lines. Position: " +
+                      std::to_string(pane.scrollPosition));
+    }
+}
+
+void ClientGUI::scrollPaneDown(Pane& pane, int lines) {
+    if (pane.scrollPosition > 0) {
+        // Scroll down to see newer lines
+        pane.scrollPosition = std::max(0, pane.scrollPosition - lines);
+        
+        updatePaneTerminalDisplay(pane);
+        updatePaneScrollBar(pane);
+        
+        guiLogger.log("[DEBUG](ClientGUI::scrollPaneDown) Scrolled down " +
+                      std::to_string(lines) + " lines. Position: " +
+                      std::to_string(pane.scrollPosition));
+    }
+}
+
+void ClientGUI::handlePaneScrolling(sf::Event event, Pane& pane) {
+    pane.scrollAccumulator += event.mouseWheelScroll.delta;
+    
+    guiLogger.log("[DEBUG](ClientGUI::handlePaneScrolling) Terminal lines count: " + std::to_string(pane.terminalLines.size()));
+    if (!pane.terminalLines.empty()) {
+        guiLogger.log("[DEBUG] First line: " + pane.terminalLines.front());
+        guiLogger.log("[DEBUG] Last line: " + pane.terminalLines.back());
+    }
+    guiLogger.log("[DEBUG](ClientGUI::handlePaneScrolling) Current scroll position: " + std::to_string(pane.scrollPosition));
+    
+    if (std::abs(pane.scrollAccumulator) >= 1.0f) {
+        int scrollLines = static_cast<int>(pane.scrollAccumulator);
+        
+        try {
+            // Invert scroll direction to match normal mode
+            if (scrollLines > 0) {
+                scrollPaneUp(pane, 1);  // Show older lines (higher index)
+            } else if (scrollLines < 0) {
+                scrollPaneDown(pane, 1);    // Show newer lines (lower index)
+            }
+        } catch (const std::exception& e) {
+            guiLogger.log("[ERROR](ClientGUI::handlePaneScrolling) Scroll failed: " + std::string(e.what()));
+        }
+        
+        pane.scrollAccumulator = 0.0f;
+    }
+}
+
 void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
+    
+    if (currentMode == editorMode::EDITTING) {
+        guiLogger.log("[DEBUG](ClientGUI::processPaneInput) Currently in nano editor mode, processing nano input.");
+        processNanoInput(event);
+        return;
+    }
+    
     if (event.type == sf::Event::TextEntered) {
         if (event.text.unicode < 128) {
             char inputChar = static_cast<char>(event.text.unicode);
             std::string currentPath = currentPane.backend -> GetPath() + "> ";
             std::string& currentInput = currentPane.currentInput;
-
+            
             // Handle Enter key (execute command)
             if (inputChar == '\r' || inputChar == '\n') {
                 // Extract command from input
@@ -1545,13 +1637,13 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                     guiLogger.log("[DEBUG](ClientGUI::ProcessPaneInput) Empty input, added new line.");
                     return;
                 }
-
+                
                 if (currentInput.length() > currentPath.length()) {
                     command = currentInput.substr(currentPath.length());
                     currentPane.commandHistory.push_back(command);
                     currentPane.currentHistoryIndex = -1;
                 }
-
+                
                 if (!command.empty()) {
                     try {
                         // Add command to terminal lines
@@ -1560,17 +1652,63 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                         // Send command to backend
                         std::string response = currentPane.backend->sendCommand(command);
                         
-                        // Process response
-                        if(!response.empty()) {
-                            std::istringstream responseStream(response);
-                            std::string line;
-                            while (std::getline(responseStream, line)) {
-                                if (!line.empty()) {
-                                    addLineToPaneTerminal(currentPane, line);
-                                }
+                        if (command.substr(0, 2) == "cd") {
+                            std::string response = currentPane.backend->sendCommand(command);
+                            if (response.find("Invalid directory") == std::string::npos &&
+                                response.find("Error") == std::string::npos) {
+                                std::string newPath = response.substr(response.find_last_of('\n') + 1);
+                                currentPane.backend->SetPath(newPath);
+                                addLineToPaneTerminal(currentPane, "Changed directory to: " + newPath);
+                            } else {
+                                addLineToPaneTerminal(currentPane, response);
                             }
                         }
-                        
+                        else
+                            if (command.substr(0, 4) == "nano") {
+                                std::string fullPath = command.substr(5);
+                                std::string fileName = std::filesystem::path(fullPath).filename().string();
+                                std::string fileContent = currentPane.backend->sendCommand(command);
+                                
+                                if (fileContent.find("Error") == std::string::npos) {
+                                    bool fileMode = (fileContent == "NEW_FILE");
+                                    currentMode = editorMode::EDITTING;
+                                    if (!fileMode) {
+                                        enterNanoEditorMode(fileContent, fileName);
+                                    } else {
+                                        enterNanoEditorMode("", fileName);
+                                    }
+                                    
+                                } else {
+                                    addLineToPaneTerminal(currentPane, fileContent);
+                                }
+                            }
+                        // Handle clear command
+                            else if (command == "clear") {
+                                currentPane.terminalLines.clear();
+                                currentPane.scrollPosition = 0;
+                                currentPane.currentInput = currentPane.backend->GetPath() + "> ";
+                                currentPane.cursorPosition = currentPane.currentInput.length();
+                                updatePaneTerminalDisplay(currentPane);
+                            }
+                        // Handle exit command
+                            else if (command == "exit") {
+                                std::string response = currentPane.backend->sendCommand(command);
+                                addLineToPaneTerminal(currentPane, response);
+                                sf::sleep(sf::milliseconds(700));
+                                closeCurrentPane();
+                            }
+                            else {
+                                // Process response
+                                if(!response.empty()) {
+                                    std::istringstream responseStream(response);
+                                    std::string line;
+                                    while (std::getline(responseStream, line)) {
+                                        if (!line.empty()) {
+                                            addLineToPaneTerminal(currentPane, line);
+                                        }
+                                    }
+                                }
+                            }
                         // Reset input
                         std::string newPrompt = currentPane.backend->GetPath() + "> ";
                         currentPane.currentInput = newPrompt;
@@ -1598,7 +1736,7 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
             }
             // Handle character input
             else if(inputChar >= 32) {
-                 size_t insertPos = currentPath.length() + static_cast<size_t>(currentPane.cursorPosition);
+                size_t insertPos = currentPath.length() + static_cast<size_t>(currentPane.cursorPosition);
                 // Limit input length
                 if (currentInput.length() < currentPath.length() + 256) {
                     // Insert character at cursor position
@@ -1608,8 +1746,10 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
                     
                 }
             }
+            
             updatePaneTerminalDisplay(currentPane);
             updatePaneCursor(currentPane);
+            
             guiLogger.log("[DEBUG](ClientGUI::processPaneInput) Input processed. Current input: " + currentInput);
         }
     }
@@ -1617,20 +1757,22 @@ void ClientGUI::processPaneInput(sf::Event event, Pane& currentPane) {
 
 void ClientGUI::handlePaneSpecialInput(sf::Event event, Pane& currentPane) {
     if (event.type == sf::Event::KeyPressed) {
-        std::string currentPath = currentPane.backend-> GetPath() + "> ";
+        std::string currentPath = currentPane.backend->GetPath() + "> ";
+        size_t inputLength = currentPane.currentInput.length() - currentPath.length();
         
         switch (event.key.code) {
             case sf::Keyboard::Right:
-                // Move cursor right, but not beyond input text
-                currentPane.cursorPosition = std::min(
-                    static_cast<float>(currentPane.inputText.getString().getSize() - currentPath.length() - 2.0f),
-                    currentPane.cursorPosition + 1.0f
-                );
+                // Move cursor right up to end of input
+                if (currentPane.cursorPosition < inputLength) {
+                    currentPane.cursorPosition++;
+                }
                 break;
                 
             case sf::Keyboard::Left:
                 // Move cursor left, but not before shell path
-                currentPane.cursorPosition = std::max(0.0f, currentPane.cursorPosition - 1.0f);
+                if (currentPane.cursorPosition > 0) {
+                    currentPane.cursorPosition--;
+                }
                 break;
                 
             case sf::Keyboard::Up:
@@ -1645,7 +1787,6 @@ void ClientGUI::handlePaneSpecialInput(sf::Event event, Pane& currentPane) {
                 break;
         }
         
-        // Update cursor position after special key input
         updatePaneCursor(currentPane);
     }
 }
@@ -2075,14 +2216,14 @@ void ClientGUI::handleScrolling(sf::Event event) {
             if (scrollLines > 0) {
                 // Scroll up
                 scrollUp(1);
-                guiLogger.log("[DEBUG] Scrolled up");
+                guiLogger.log("[DEBUG](ClientGUI::handleScrolling) Scrolled up");
             } else if (scrollLines < 0) {
                 // Scroll down
                 scrollDown(1);
-                guiLogger.log("[DEBUG] Scrolled down");
+                guiLogger.log("[DEBUG](ClientGUI::handleScrolling) Scrolled down");
             }
         } catch (const std::exception& e) {
-            guiLogger.log("[ERROR] Scroll failed: " + std::string(e.what()));
+            guiLogger.log("[ERROR](ClientGUI::handleScrolling) Scroll failed: " + std::string(e.what()));
         }
         
         // Reset accumulator
@@ -2133,9 +2274,9 @@ void ClientGUI::handlePaneShortcuts(sf::Event event) {
         case sf::Keyboard::H: // Horizontal split
             try {
                 createNewPane(SplitType::HORIZONTAL);
-                guiLogger.log("[INFO] Created horizontal pane split");
+                guiLogger.log("[INFO](ClientGUI::handlePaneShortcuts) Created horizontal pane split");
             } catch (const std::exception& e) {
-                guiLogger.log("[ERROR] Failed to create horizontal pane: " +
+                guiLogger.log("[ERROR](ClientGUI::handlePaneShortcuts) Failed to create horizontal pane: " +
                               std::string(e.what()));
             }
             break;
@@ -2145,7 +2286,7 @@ void ClientGUI::handlePaneShortcuts(sf::Event event) {
                 createNewPane(SplitType::VERTICAL);
                 guiLogger.log("[INFO] Created vertical pane split");
             } catch (const std::exception& e) {
-                guiLogger.log("[ERROR] Failed to create vertical pane: " +
+                guiLogger.log("[ERROR](ClientGUI::handlePaneShortcuts) Failed to create vertical pane: " +
                               std::string(e.what()));
             }
             break;
@@ -2153,25 +2294,25 @@ void ClientGUI::handlePaneShortcuts(sf::Event event) {
         case sf::Keyboard::Num0: // Switch panes
         {
             if (panes.size() > 1) {
-                    switchPane(-1); // Move backwards
-                    guiLogger.log("[DEBUG] Switched to previous pane");
-                }
+                switchPane(-1); // Move backwards
+                guiLogger.log("[DEBUG](ClientGUI::handlePaneShortcuts) Switched to previous pane");
+            }
             break;
         }
             
         case sf::Keyboard::Num1: // Switch panes
         {
             if (panes.size() > 1) {
-                    switchPane(1); // Move forward
-                    guiLogger.log("[DEBUG] Switched to next pane");
-                }
+                switchPane(1); // Move forward
+                guiLogger.log("[DEBUG](ClientGUI::handlePaneShortcuts) Switched to next pane");
+            }
             break;
         }
             
         case sf::Keyboard::W: // Close current pane
             if (!panes.empty()) {
                 closeCurrentPane();
-                guiLogger.log("[INFO] Closed current pane");
+                guiLogger.log("[INFO](ClientGUI::handlePaneShortcuts) Closed current pane");
             }
             break;
             
@@ -2210,7 +2351,7 @@ void ClientGUI::run() {
     
     // Main application loop
     while (window.isOpen()) {
-       
+        
         if (!panes.empty()) {
             renderPanes();
         }
@@ -2225,8 +2366,6 @@ void ClientGUI::run() {
                 return;
             }
             
-           
-            
             // Pane management shortcuts (Ctrl + key)
             if (event.type == sf::Event::KeyPressed &&
                 sf::Keyboard::isKeyPressed(sf::Keyboard::LControl)) {
@@ -2235,7 +2374,7 @@ void ClientGUI::run() {
                     if (!panes.empty()) {
                         renderPanes();
                     }
-                   
+                    
                 } catch (const std::exception& e) {
                     guiLogger.log("[ERROR](ClientGUI::run) Pane shortcut error: " +
                                   std::string(e.what()));
@@ -2258,6 +2397,12 @@ void ClientGUI::run() {
                     guiLogger.log("[ERROR](ClientGUI::run) Nano editor input error: " +
                                   std::string(e.what()));
                 }
+            }
+            
+            // mouse scrolling
+            if (!panes.empty() && event.type == sf::Event::MouseWheelScrolled) {
+                handlePaneScrolling(event, panes[currentPaneIndex]);
+                continue;
             }
             
             // Scroll handling

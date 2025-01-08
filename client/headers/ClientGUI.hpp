@@ -51,6 +51,7 @@ struct Pane {
     std::string currentPath;
     std::string currentInput;
     float cursorPosition = 0.0f;
+    float scrollAccumulator = 0.0f;
     int scrollPosition = 0;
     std::vector<std::string> commandHistory;
     size_t currentHistoryIndex = -1;
@@ -158,8 +159,10 @@ private:
     void processPaneInput(sf::Event event, Pane& currentPane);
     void navigatePaneCommandHistory(Pane& currentPane, bool goUp);
     void handlePaneSpecialInput(sf::Event event, Pane& currentPane);
+    void scrollPaneUp(Pane& pane, int lines = 1);
+    void scrollPaneDown(Pane& pane, int lines = 1);
+    void handlePaneScrolling(sf::Event event, Pane& pane);
     void closeCurrentPane();
-
     
     // command history
     std::vector<std::string> commandHistory;
